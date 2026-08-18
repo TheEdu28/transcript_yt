@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
@@ -84,13 +84,30 @@ def build_evidence_context(evidence: list[dict[str, Any]], max_chars: int) -> st
     return "\n\n".join(records)[:max_chars]
 
 
+def normalize_json_response(raw_response: str) -> str:
+    """Remove optional Markdown fences before validating a provider JSON response."""
+    response = raw_response.strip()
+    if not response.startswith("```"):
+        return response
+    lines = response.splitlines()
+    if lines and lines[0].startswith("```"):
+        lines = lines[1:]
+    if lines and lines[-1].strip() == "```":
+        lines = lines[:-1]
+    return "\n".join(lines).strip()
+
+
 def parse_grounded_summary(raw_response: str, evidence: list[dict[str, Any]]) -> SummaryResponse:
     """Parse Gemini JSON and reject summaries that cite timestamps not retrieved by RAG."""
     try:
-        result = SummaryResponse.model_validate_json(raw_response)
+        result = SummaryResponse.model_validate_json(normalize_json_response(raw_response))
     except ValidationError as error:
+        invalid_fields = ", ".join(
+            ".".join(str(part) for part in issue["loc"])
+            for issue in error.errors(include_url=False)[:4]
+        )
         raise PipelineError(
-            "Gemini devolvió un resumen con una estructura inválida.",
+            f"Gemini devolvió un resumen con estructura inválida en: {invalid_fields or 'JSON'}.",
             code="INVALID_SUMMARY_RESPONSE", status_code=502,
         ) from error
 
@@ -144,13 +161,22 @@ class YouTubeService:
             from yt_dlp import YoutubeDL
             from yt_dlp.utils import DownloadError
 
-            with YoutubeDL({"quiet": True, "no_warnings": True, "noplaylist": True}) as ydl:
+            ydl_opts: dict[str, Any] = {
+                "quiet": False, "no_warnings": False, "noplaylist": True,
+                "js_runtimes": {"node": {"path": "C:/Program Files/nodejs/node.exe"}},
+                "remote_components": ["ejs:github"],
+            }
+            cookies_path = settings.resolved_yt_dlp_cookie_file
+            if cookies_path.exists():
+                ydl_opts["cookiefile"] = str(cookies_path)
+            with YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
         except DownloadError as error:
-            if "private" in str(error).lower():
+            error_msg = str(error).lower()
+            if "private" in error_msg:
                 raise PipelineError("El video debe ser público.", code="VIDEO_NOT_PUBLIC", status_code=403) from error
             raise PipelineError(
-                "No se pudo acceder al video; puede ser privado, eliminado o restringido.",
+                f"No se pudo acceder al video: {error}",
                 code="VIDEO_UNAVAILABLE", status_code=403,
             ) from error
 
@@ -200,11 +226,16 @@ class YouTubeService:
         from yt_dlp import YoutubeDL
 
         output_template = str(settings.audio_directory / f"{video.youtube_id}.%(ext)s")
+        cookies_path = settings.resolved_yt_dlp_cookie_file
         options = {
             "format": "bestaudio/best", "outtmpl": output_template, "noplaylist": True,
             "quiet": True, "no_warnings": True,
+            "js_runtimes": {"node": {"path": "C:/Program Files/nodejs/node.exe"}},
+            "remote_components": ["ejs:github"],
             "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "128"}],
         }
+        if cookies_path.exists():
+            options["cookiefile"] = str(cookies_path)
         try:
             with YoutubeDL(options) as ydl:
                 ydl.download([video.url])
@@ -321,7 +352,12 @@ explica insuficiencia y deja las listas vacías. Cada timestamp debe existir en 
             raise PipelineError("Falta GEMINI_API_KEY en el entorno.", code="GEMINI_API_KEY_MISSING", status_code=503)
         self.settings = settings
 
-    def generate_json(self, task: str, evidence: list[dict[str, Any]]) -> str:
+    def generate_json(
+        self,
+        task: str,
+        evidence: list[dict[str, Any]],
+        response_schema: type[BaseModel] | None = None,
+    ) -> str:
         from google import genai
         from google.genai import types
 
@@ -330,17 +366,35 @@ explica insuficiencia y deja las listas vacías. Cada timestamp debe existir en 
         if not context:
             raise PipelineError("No hay evidencia indexada suficiente.", code="NO_RAG_EVIDENCE", status_code=422)
         client = genai.Client(api_key=self.settings.gemini_api_key)
-        try:
-            response = client.models.generate_content(
-                model=self.settings.gemini_model,
-                contents=f"{task}\n\nEVIDENCIA RECUPERADA:\n{context}",
-                config=types.GenerateContentConfig(
-                    system_instruction=self.SYSTEM_INSTRUCTION, response_mime_type="application/json",
-                    temperature=0.1, max_output_tokens=self.settings.max_gemini_output_tokens,
-                ),
-            )
-        except Exception as error:
-            raise PipelineError("Gemini no pudo generar el recurso solicitado.", code="GEMINI_REQUEST_FAILED", status_code=502) from error
+        config = types.GenerateContentConfig(
+            system_instruction=self.SYSTEM_INSTRUCTION,
+            response_mime_type="application/json",
+            temperature=0.1,
+            max_output_tokens=self.settings.max_gemini_output_tokens,
+            response_schema=response_schema,
+        )
+        for attempt in range(2):
+            try:
+                response = client.models.generate_content(
+                    model=self.settings.gemini_model,
+                    contents=f"{task}\n\nEVIDENCIA RECUPERADA:\n{context}",
+                    config=config,
+                )
+                break
+            except Exception as error:
+                status_code = getattr(error, "status_code", None)
+                if status_code in {429, 500, 503} and attempt == 0:
+                    time.sleep(1)
+                    continue
+                if status_code in {429, 500, 503}:
+                    raise PipelineError(
+                        "Gemini no está disponible temporalmente. Intenta de nuevo en unos segundos.",
+                        code="GEMINI_UNAVAILABLE", status_code=503,
+                    ) from error
+                raise PipelineError(
+                    "Gemini no pudo generar el recurso solicitado.",
+                    code="GEMINI_REQUEST_FAILED", status_code=502,
+                ) from error
         if not response.text:
             raise PipelineError("Gemini no devolvió contenido.", code="EMPTY_GEMINI_RESPONSE", status_code=502)
         return response.text
@@ -395,11 +449,12 @@ class PipelineService:
     def summary(self, video_id: int, focus: str, session: Session) -> SummaryResponse:
         self._assert_indexed(video_id, session)
         evidence = self.vectors.retrieve(video_id, focus)
-        prompt = """Genera JSON válido exactamente con: synopsis, glossary, didactic_blocks,
-evidence_sufficient, insufficiency_note. synopsis debe tener menos de 200 palabras. glossary contiene
-term, definition, timestamp. didactic_blocks contiene title, explanation, timestamps. Usa timestamps
-HH:MM:SS de la evidencia y no incluyas información no respaldada."""
-        raw_response = GeminiService(self.settings).generate_json(prompt, evidence)
+        prompt = """Genera el resumen didáctico solicitado a partir de la evidencia. La sinopsis debe
+tener menos de 200 palabras. Los timestamps deben tener el formato HH:MM:SS y coincidir exactamente
+con los límites de tiempo presentes en la evidencia recuperada."""
+        raw_response = GeminiService(self.settings).generate_json(
+            prompt, evidence, response_schema=SummaryResponse,
+        )
         return parse_grounded_summary(raw_response, evidence)
 
     def quiz(self, video_id: int, multiple_choice_count: int, open_question_count: int, session: Session) -> QuizResponse:

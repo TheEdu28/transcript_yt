@@ -5,7 +5,7 @@ import json
 import pytest
 
 from app.core.errors import PipelineError
-from app.services.pipeline import build_evidence_context, parse_grounded_summary
+from app.services.pipeline import build_evidence_context, normalize_json_response, parse_grounded_summary
 
 EVIDENCE = [
     {"start": "00:00:10", "end": "00:00:30", "text": "La fotosíntesis transforma energía luminosa."},
@@ -37,6 +37,11 @@ def test_parse_grounded_summary_accepts_retrieved_timestamps() -> None:
     """HU-05 accepts summaries whose citations are present in RAG evidence."""
     result = parse_grounded_summary(summary_payload(), EVIDENCE)
     assert result.glossary[0].timestamp == "00:00:10"
+
+
+def test_normalize_json_response_removes_markdown_fence() -> None:
+    """Accept JSON returned inside an accidental Markdown code block."""
+    assert normalize_json_response("```json\n{\"value\": 1}\n```") == '{"value": 1}'
 
 
 def test_parse_grounded_summary_rejects_unknown_timestamp() -> None:

@@ -2,6 +2,18 @@
 
 Este archivo registra los incrementos funcionales del prototipo de tesis.
 
+## Corrección de integración YouTube
+
+- Se agregó `YTDLP_COOKIE_FILE` para configurar explícitamente el archivo local de cookies usado por yt-dlp.
+- Se actualizó yt-dlp a `2026.7.4` para incorporar correcciones recientes del extractor de YouTube.
+- Las cookies permanecen fuera de control de versiones y no se copian ni se exponen desde la aplicación.
+
+## Corrección de salida Gemini
+
+- El resumen envía el esquema Pydantic `SummaryResponse` a Gemini para recibir JSON estructurado.
+- Se normalizan bloques Markdown accidentales antes de validar la respuesta.
+- Se actualizó el SDK `google-genai` a `2.18.1` y se agregó un reintento para fallos transitorios `429`, `500` y `503`.
+
 ## Sprint 2 - HU-03 y HU-05
 
 ### Implementado

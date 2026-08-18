@@ -6,7 +6,7 @@ Prototipo académico que transforma videos educativos de YouTube en material did
 
 El backend funcional vive en `backend/`. El Sprint 1 implementa la ingesta de videos públicos de YouTube con idioma español o inglés y duración máxima de 60 minutos. El Sprint 2 implementa el resumen RAG en `POST /api/v1/materials/summary`.
 
-El resumen recupera únicamente chunks indexados en ChromaDB, limita el contexto enviado a Gemini y valida que cada timestamp del glosario y de los bloques didácticos exista en la evidencia recuperada. Si Gemini devuelve JSON inválido, excede 200 palabras o cita un timestamp no recuperado, la API rechaza la respuesta.
+El resumen recupera únicamente chunks indexados en ChromaDB, limita el contexto enviado a Gemini y valida que cada timestamp del glosario y de los bloques didácticos exista en la evidencia recuperada. Gemini recibe el esquema Pydantic de la salida para forzar un JSON estructurado. La salida permite hasta 4096 tokens para completar el recurso, mientras la entrada permanece limitada a 12000 caracteres. Si Gemini devuelve JSON inválido, excede 200 palabras o cita un timestamp no recuperado, la API rechaza la respuesta. Los fallos temporales de Gemini se reintentan una vez y después se devuelven como `503`.
 
 ## Requisitos cubiertos
 
@@ -20,6 +20,8 @@ El resumen recupera únicamente chunks indexados en ChromaDB, limita el contexto
 ## Inicio local
 
 Requiere Python 3.11+, FFmpeg y una clave gratuita de Google AI Studio. La clave de YouTube Data API v3 es opcional para el futuro buscador.
+
+Si YouTube rechaza un video público con mensajes como `The page needs to be reloaded`, exporta las cookies de la sesión autenticada en formato Netscape y configura su ubicación mediante `YTDLP_COOKIE_FILE`. El archivo de cookies es confidencial y no debe subirse al repositorio.
 
 \`\`\`powershell
 python -m venv backend\.venv

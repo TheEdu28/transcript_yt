@@ -3,6 +3,12 @@ __pycache__/
 .venv/
 .pytest_cache/
 .env
+
+# Cookies de sesión (confidencial)
+cookies.txt
+*.txt
+
+# Datos generados localmente
 data/*
 !data/transcripts/
 !data/chroma/
@@ -17,8 +23,17 @@ data/transcripts/processed/*
 !data/transcripts/processed/.gitkeep
 data/chroma/*
 !data/chroma/.gitkeep
+data/chroma_db/
 data/metadata/*
 !data/metadata/.gitkeep
 data/exports/*
 !data/exports/.gitkeep
+
+# Backend data
+backend/data/
+
+# Respuestas cacheadas de Gemini
+*.json
+!package.json
+
 .ipynb_checkpoints/

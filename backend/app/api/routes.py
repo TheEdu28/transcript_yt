@@ -45,6 +45,7 @@ def ingest_video(payload: IngestRequest, session: Session = Depends(get_session)
 @router.post(
     "/materials/summary", response_model=SummaryResponse,
     responses={409: {"description": "Video sin indexar"}, 422: {"description": "Sin evidencia RAG"},
+               503: {"description": "Gemini no disponible temporalmente"},
                502: {"description": "Respuesta Gemini inválida o no fundamentada"}},
 )
 def generate_summary(payload: SummaryRequest, session: Session = Depends(get_session)) -> SummaryResponse:
