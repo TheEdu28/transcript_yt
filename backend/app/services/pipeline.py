@@ -19,7 +19,8 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.core.errors import PipelineError
 from app.repositories.video_repository import VideoRepository
-from app.schemas.contracts import QuizResponse, SummaryResponse
+from app.schemas.contracts import BloomLevel, QuizResponse, SummaryResponse
+from app.services.material_service import MaterialService
 
 SUPPORTED_LANGUAGES = {"es", "en"}
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}
@@ -135,6 +136,70 @@ def parse_grounded_summary(raw_response: str, evidence: list[dict[str, Any]]) ->
             "La respuesta insuficiente de Gemini contiene material no respaldado.",
             code="INCONSISTENT_EVIDENCE_RESPONSE", status_code=502,
         )
+    return result
+
+
+def parse_grounded_quiz(
+    raw_response: str,
+    evidence: list[dict[str, Any]],
+    multiple_choice_count: int,
+    open_question_count: int,
+    bloom_levels: list[BloomLevel] | None = None,
+) -> QuizResponse:
+    """Parse and verify a quiz before exposing Gemini output through the API."""
+    try:
+        result = QuizResponse.model_validate_json(normalize_json_response(raw_response))
+    except ValidationError as error:
+        invalid_fields = ", ".join(
+            ".".join(str(part) for part in issue["loc"])
+            for issue in error.errors(include_url=False)[:4]
+        )
+        raise PipelineError(
+            f"Gemini devolvió un cuestionario con estructura inválida en: {invalid_fields or 'JSON'}.",
+            code="INVALID_QUIZ_RESPONSE", status_code=502,
+        ) from error
+
+    available_timestamps = {
+        str(value)
+        for item in evidence
+        for value in (item.get("start"), item.get("end"))
+        if value is not None
+    }
+    cited_timestamps = [item.evidence_timestamp for item in result.multiple_choice]
+    cited_timestamps.extend(item.evidence_timestamp for item in result.open_questions)
+    unknown = sorted(set(cited_timestamps) - available_timestamps)
+    if unknown:
+        raise PipelineError(
+            "El cuestionario cita timestamps que no pertenecen a la evidencia recuperada.",
+            code="UNGROUNDED_TIMESTAMP", status_code=502,
+        )
+    if not result.evidence_sufficient:
+        if result.multiple_choice or result.open_questions:
+            raise PipelineError(
+                "La respuesta insuficiente de Gemini contiene preguntas no respaldadas.",
+                code="INCONSISTENT_EVIDENCE_RESPONSE", status_code=502,
+            )
+        return result
+    if len(result.multiple_choice) != multiple_choice_count or len(result.open_questions) != open_question_count:
+        raise PipelineError(
+            "Gemini no devolvió la cantidad de preguntas solicitada.",
+            code="QUIZ_COUNT_MISMATCH", status_code=502,
+        )
+    allowed_levels = set(bloom_levels or list(BloomLevel))
+    generated_levels = [item.bloom_level for item in result.multiple_choice]
+    generated_levels.extend(item.bloom_level for item in result.open_questions)
+    if set(generated_levels) - allowed_levels:
+        raise PipelineError(
+            "Gemini generó preguntas fuera de los niveles de Bloom solicitados.",
+            code="UNREQUESTED_BLOOM_LEVEL", status_code=502,
+        )
+    for question in result.multiple_choice:
+        normalized_options = [option.strip().casefold() for option in question.options]
+        if len(set(normalized_options)) != len(normalized_options):
+            raise PipelineError(
+                "Gemini devolvió opciones repetidas en una pregunta de selección múltiple.",
+                code="DUPLICATE_QUIZ_OPTIONS", status_code=502,
+            )
     return result
 
 
@@ -411,38 +476,68 @@ class PipelineService:
         self.vectors = VectorStoreService(self.settings)
         self.repository = VideoRepository()
 
-    def ingest(self, url: str, session: Session) -> dict[str, Any]:
-        started = time.perf_counter()
+    def queue_ingest(self, url: str, session: Session) -> dict[str, Any]:
+        """Validate metadata and create a pollable job before expensive local work begins."""
         video_info = self.youtube.inspect(url, self.settings)  # 1. validar antes de descargar
         existing = self.repository.get_by_youtube_id(session, video_info.youtube_id)
         if existing and existing.status == "indexed":
-            return {"video_id": existing.id, "title": existing.title, "language": existing.language,
-                    "duration_seconds": existing.duration_seconds, "chunks_indexed": 0,
-                    "processing_seconds": existing.processing_seconds}
+            return {"video_id": existing.id, "status": existing.status, "progress_stage": existing.progress_stage,
+                    "progress_percent": existing.progress_percent, "queued": False}
+        if existing and existing.status in {"queued", "processing"}:
+            return {"video_id": existing.id, "status": existing.status, "progress_stage": existing.progress_stage,
+                    "progress_percent": existing.progress_percent, "queued": False}
         transcript_path = self.settings.raw_transcripts_directory / f"{video_info.youtube_id}.json"
         video = existing or self.repository.create(
             session, youtube_id=video_info.youtube_id, source_url=video_info.url, title=video_info.title,
             language=video_info.language, duration_seconds=video_info.duration_seconds,
-            transcript_path=str(transcript_path), status="processing", processing_seconds=0.0,
+            transcript_path=str(transcript_path), status="queued", progress_stage="queued",
+            progress_percent=0, processing_seconds=0.0,
         )
+        if existing:
+            self.repository.update_progress(session, video, "queued", 0, status="queued")
+        return {"video_id": video.id, "status": video.status, "progress_stage": video.progress_stage,
+                "progress_percent": video.progress_percent, "queued": True}
+
+    def ingest(self, url: str, session: Session) -> dict[str, Any]:
+        """Preserve the original synchronous endpoint while using the same job state machine."""
+        job = self.queue_ingest(url, session)
+        if job["status"] == "indexed":
+            video = self.repository.get(session, job["video_id"])
+            assert video is not None
+            return self._ingest_result(video, chunks_indexed=0)
+        if not job["queued"]:
+            raise PipelineError("El video ya se está procesando.", code="VIDEO_ALREADY_PROCESSING", status_code=409)
+        return self.process_queued_ingest(job["video_id"], session)
+
+    def process_queued_ingest(self, video_id: int, session: Session) -> dict[str, Any]:
+        """Run the local ingestion stages and publish their state for HU-02 polling."""
+        video = self.repository.get(session, video_id)
+        if not video:
+            raise PipelineError("El video no existe.", code="VIDEO_NOT_FOUND", status_code=404)
+        started = time.perf_counter()
+        video_info = VideoInfo(video.youtube_id, video.source_url, video.title, video.duration_seconds, video.language)
+        transcript_path = Path(video.transcript_path)
         try:
+            self.repository.update_progress(session, video, "downloading_audio", 10)
             audio_path = self.youtube.download_audio(video_info, self.settings)  # 2. audio
+            self.repository.update_progress(session, video, "transcribing", 35)
             segments = self.whisper.transcribe(audio_path, video_info.language, self.settings)  # 3. Whisper
             transcript_path.write_text(json.dumps([asdict(s) for s in segments], ensure_ascii=False, indent=2), encoding="utf-8")
+            self.repository.update_progress(session, video, "chunking", 65)
             chunks = self.chunker.build(segments, self.settings)  # 4. chunks con solapamiento
+            self.repository.update_progress(session, video, "indexing", 75)
             self.vectors.index(video.id, chunks)  # 5-6. embeddings + Chroma persistente
             elapsed = round(time.perf_counter() - started, 2)
-            video.status, video.processing_seconds = "indexed", elapsed
+            video.status, video.progress_stage, video.progress_percent = "indexed", "completed", 100
+            video.processing_seconds = elapsed
             session.commit()
-            return {"video_id": video.id, "title": video.title, "language": video.language,
-                    "duration_seconds": video.duration_seconds, "chunks_indexed": len(chunks),
-                    "processing_seconds": elapsed}
+            return self._ingest_result(video, chunks_indexed=len(chunks))
         except PipelineError:
-            video.status = "failed"
+            video.status, video.progress_stage = "failed", "failed"
             session.commit()
             raise
         except Exception as error:
-            video.status = "failed"
+            video.status, video.progress_stage = "failed", "failed"
             session.commit()
             raise PipelineError("Falló el pipeline de ingesta.", code="INGESTION_FAILED", status_code=500) from error
 
@@ -455,9 +550,18 @@ con los límites de tiempo presentes en la evidencia recuperada."""
         raw_response = GeminiService(self.settings).generate_json(
             prompt, evidence, response_schema=SummaryResponse,
         )
-        return parse_grounded_summary(raw_response, evidence)
+        return MaterialService().save_generated(
+            session, video_id, "summary", parse_grounded_summary(raw_response, evidence),
+        )
 
-    def quiz(self, video_id: int, multiple_choice_count: int, open_question_count: int, session: Session) -> QuizResponse:
+    def quiz(
+        self,
+        video_id: int,
+        multiple_choice_count: int,
+        open_question_count: int,
+        bloom_levels: list[BloomLevel],
+        session: Session,
+    ) -> QuizResponse:
         self._assert_indexed(video_id, session)
         evidence = self.vectors.retrieve(video_id, "hechos, definiciones, procesos y ejemplos para evaluación")
         prompt = f"""Genera JSON válido con multiple_choice, open_questions, evidence_sufficient,
@@ -465,8 +569,24 @@ insufficiency_note. Genera exactamente {multiple_choice_count} preguntas de opci
 {open_question_count} abiertas. Cada múltiple debe contener question, options (exactamente 4),
 correct_option (índice 0-3), explanation y evidence_timestamp. Los tres distractores deben provenir
 de conceptos mencionados en la evidencia, pero ser incorrectos para la pregunta. Cada abierta contiene
-question, expected_points y evidence_timestamp. No inventes contenido ni timestamps."""
-        return QuizResponse.model_validate_json(GeminiService(self.settings).generate_json(prompt, evidence))
+question, expected_points y evidence_timestamp. Toda pregunta debe contener bloom_level y usar sólo
+uno de estos niveles solicitados: {', '.join(level.value for level in bloom_levels)}. Si la evidencia no basta, establece
+evidence_sufficient=false, explica la insuficiencia y devuelve ambas listas vacías. No inventes
+contenido ni timestamps."""
+        raw_response = GeminiService(self.settings).generate_json(
+            prompt, evidence, response_schema=QuizResponse,
+        )
+        return MaterialService().save_generated(
+            session, video_id, "quiz",
+            parse_grounded_quiz(raw_response, evidence, multiple_choice_count, open_question_count, bloom_levels),
+        )
+
+    @staticmethod
+    def _ingest_result(video: Any, chunks_indexed: int) -> dict[str, Any]:
+        """Return the established synchronous-ingestion response contract."""
+        return {"video_id": video.id, "title": video.title, "language": video.language,
+                "duration_seconds": video.duration_seconds, "chunks_indexed": chunks_indexed,
+                "processing_seconds": video.processing_seconds}
 
     def _assert_indexed(self, video_id: int, session: Session) -> None:
         video = self.repository.get(session, video_id)

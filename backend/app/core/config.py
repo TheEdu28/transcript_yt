@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     raw_transcripts_directory: Path = DATA_DIR / "transcripts" / "raw"
     processed_transcripts_directory: Path = DATA_DIR / "transcripts" / "processed"
     audio_directory: Path = DATA_DIR / "audio"
+    export_directory: Path = DATA_DIR / "exports"
 
     @property
     def resolved_yt_dlp_cookie_file(self) -> Path:
@@ -54,7 +55,7 @@ class Settings(BaseSettings):
         """Create only the local directories used by the pipeline at startup."""
         for directory in (self.chroma_persist_directory, self.raw_transcripts_directory,
                           self.processed_transcripts_directory, self.audio_directory,
-                          DATA_DIR / "metadata"):
+                          self.export_directory, DATA_DIR / "metadata"):
             directory.mkdir(parents=True, exist_ok=True)
 
 

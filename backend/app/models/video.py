@@ -18,5 +18,6 @@ class Video(Base):
     duration_seconds: Mapped[int] = mapped_column(Integer)
     transcript_path: Mapped[str] = mapped_column(String(2048))
     status: Mapped[str] = mapped_column(String(30), default="indexed")
+    progress_stage: Mapped[str] = mapped_column(String(40), default="completed")
+    progress_percent: Mapped[int] = mapped_column(Integer, default=100)
     processing_seconds: Mapped[float] = mapped_column(Float, default=0.0)
-

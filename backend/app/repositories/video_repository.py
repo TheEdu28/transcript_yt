@@ -23,6 +23,12 @@ class VideoRepository:
         video.status = status
         session.commit()
 
+    def update_progress(self, session: Session, video: Video, stage: str, percent: int, status: str = "processing") -> None:
+        """Persist a monotonic, API-visible ingestion stage for polling clients."""
+        video.status = status
+        video.progress_stage = stage
+        video.progress_percent = max(0, min(100, percent))
+        session.commit()
+
     def get_by_youtube_id(self, session: Session, youtube_id: str) -> Video | None:
         return session.scalar(select(Video).where(Video.youtube_id == youtube_id))
-

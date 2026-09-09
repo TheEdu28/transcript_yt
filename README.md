@@ -4,9 +4,17 @@ Prototipo académico que transforma videos educativos de YouTube en material did
 
 ## Alcance actual
 
-El backend funcional vive en `backend/`. El Sprint 1 implementa la ingesta de videos públicos de YouTube con idioma español o inglés y duración máxima de 60 minutos. El Sprint 2 implementa el resumen RAG en `POST /api/v1/materials/summary`.
+El backend funcional vive en `backend/`. Los Sprints 1 y 2 implementan la ingesta de videos públicos de YouTube con idioma español o inglés y duración máxima de 60 minutos, además del resumen RAG en `POST /api/v1/materials/summary`. El Sprint 3 incorpora el cuestionario de autoevaluación en `POST /api/v1/materials/quiz`. El Sprint 4 añade ingesta asíncrona con progreso, edición persistida y exportación local de materiales. El Sprint 5 completa la selección de niveles de Bloom y la retroalimentación interactiva.
 
 El resumen recupera únicamente chunks indexados en ChromaDB, limita el contexto enviado a Gemini y valida que cada timestamp del glosario y de los bloques didácticos exista en la evidencia recuperada. Gemini recibe el esquema Pydantic de la salida para forzar un JSON estructurado. La salida permite hasta 4096 tokens para completar el recurso, mientras la entrada permanece limitada a 12000 caracteres. Si Gemini devuelve JSON inválido, excede 200 palabras o cita un timestamp no recuperado, la API rechaza la respuesta. Los fallos temporales de Gemini se reintentan una vez y después se devuelven como `503`.
+
+El cuestionario recupera evidencia distinta desde ChromaDB, solicita a Gemini preguntas de opción múltiple y abiertas, y valida localmente que el número de preguntas, las cuatro opciones distintas y cada timestamp correspondan a evidencia recuperada. Si no hay evidencia suficiente, devuelve listas vacías con una nota explicativa, sin inventar preguntas.
+
+Los recursos generados se almacenan en SQLite con un `material_id`: pueden consultarse o reemplazarse mediante API sin volver a consumir Gemini. También se exportan localmente a JSON o Markdown dentro de `data/exports`. Para ingestas largas, `POST /api/v1/videos/ingest/async` devuelve de inmediato un `video_id`; la interfaz puede sondear `GET /api/v1/videos/{video_id}/progress` hasta obtener el estado `indexed` o `failed`.
+
+Al solicitar un cuestionario, el cliente puede configurar uno o varios niveles de Bloom: `remember`, `understand`, `apply`, `analyze`, `evaluate` y `create`. Cada pregunta conserva su `bloom_level`. La retroalimentación de opción múltiple es inmediata y local; las respuestas abiertas se evalúan con Gemini y evidencia RAG, conservando el timestamp de respaldo del cuestionario.
+
+La interfaz visual integrada está disponible en `http://127.0.0.1:8000/ui/`. Permite probar el flujo completo sin construir solicitudes HTTP manuales: ingesta con progreso, generación de resumen/cuestionario, selección Bloom, respuestas, retroalimentación, edición y exportación.
 
 ## Requisitos cubiertos
 
@@ -31,7 +39,7 @@ cd backend
 uvicorn app.main:app --reload
 \`\`\`
 
-La documentación queda en `http://127.0.0.1:8000/docs`; `GET /api/v1/health` comprueba que la API levantó. Consulta `docs/CHANGELOG.md` para el historial por sprint.
+Después de iniciar el servidor, abre `http://127.0.0.1:8000/ui/` y sigue el orden de los seis paneles. Antes de probar, configura `GEMINI_API_KEY` en `.env` y verifica que FFmpeg esté instalado y disponible en `PATH`. Las cookies Netscape en `data/cookies.txt` sólo deben renovarse si YouTube bloquea la ingesta de un video nuevo. La documentación queda en `http://127.0.0.1:8000/docs`; `GET /api/v1/health` comprueba que la API levantó. Consulta `docs/CHANGELOG.md` para el historial por sprint.
 
 ## Carpetas
 
@@ -48,8 +56,6 @@ La documentación queda en `http://127.0.0.1:8000/docs`; `GET /api/v1/health` co
 | \`notebooks\` | Prototipos aislados de Whisper, embeddings/ChromaDB y Gemini. |
 | \`data\` | Datos locales: transcripciones, ChromaDB, SQLite y exportaciones. |
 
-## Siguientes incrementos
+## Estado del alcance
 
-1. Sprint 3: cuestionario de autoevaluación (HU-04).
-2. Sprint 4: progreso, edición y exportación (HU-02, HU-06 y HU-07).
-3. Sprint 5: configuración Bloom y retroalimentación interactiva (HU-08 y HU-09).
+Los cinco sprints previstos han sido implementados. Las ampliaciones futuras pueden incorporar interfaz web, autenticación de estudiantes o nuevos formatos de exportación, sin alterar el pipeline local actual.

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aula Video · Prototipo de tesis</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">PROTOTIPO RAG LOCAL</p>
+        <h1>Aula<span>Video</span></h1>
+        <p class="lede">Convierte videos educativos de YouTube en material para estudiar, practicar y revisar.</p>
+      </div>
+      <a class="docs-link" href="/docs" target="_blank" rel="noreferrer">Ver API Docs ↗</a>
+    </header>
+
+    <section class="steps" aria-label="Flujo del prototipo">
+      <span>1. Ingesta</span><i></i><span>2. Genera</span><i></i><span>3. Responde</span><i></i><span>4. Exporta</span>
+    </section>
+
+    <div id="notice" class="notice" role="status" aria-live="polite">Listo para iniciar una ingesta.</div>
+
+    <section class="grid top-grid">
+      <article class="panel accent-panel">
+        <div class="panel-heading"><p class="number">01</p><h2>Importa un video</h2></div>
+        <p class="hint">Videos públicos de YouTube en español o inglés, con duración máxima de 60 minutos.</p>
+        <form id="ingest-form" class="stack">
+          <label>URL de YouTube<input id="video-url" type="url" placeholder="https://www.youtube.com/watch?v=..." required></label>
+          <button type="submit">Iniciar procesamiento <span>→</span></button>
+        </form>
+        <div id="progress-card" class="progress-card hidden">
+          <div class="progress-label"><strong id="progress-stage">En cola</strong><span id="progress-value">0%</span></div>
+          <div class="progress-track"><div id="progress-bar"></div></div>
+          <small id="progress-detail">Esperando al procesamiento local.</small>
+        </div>
+      </article>
+
+      <article class="panel video-panel">
+        <div class="panel-heading"><p class="number">02</p><h2>Material didáctico</h2></div>
+        <label>Video ID<input id="video-id" type="number" min="1" placeholder="Se completa al terminar"></label>
+        <div class="actions two-actions">
+          <button id="summary-button" type="button" class="secondary">Generar resumen</button>
+          <button id="quiz-button" type="button">Generar cuestionario</button>
+        </div>
+        <fieldset class="bloom-fieldset">
+          <legend>Niveles de Bloom</legend>
+          <div class="bloom-options">
+            <label><input type="checkbox" value="remember" checked> Recordar</label>
+            <label><input type="checkbox" value="understand" checked> Comprender</label>
+            <label><input type="checkbox" value="apply" checked> Aplicar</label>
+            <label><input type="checkbox" value="analyze"> Analizar</label>
+            <label><input type="checkbox" value="evaluate"> Evaluar</label>
+            <label><input type="checkbox" value="create"> Crear</label>
+          </div>
+        </fieldset>
+        <div class="count-row">
+          <label>Opción múltiple<input id="multiple-count" type="number" min="1" max="10" value="5"></label>
+          <label>Abiertas<input id="open-count" type="number" min="1" max="8" value="3"></label>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid results-grid">
+      <article class="panel output-panel"><div class="panel-heading"><p class="number">03</p><h2>Resumen</h2></div><div id="summary-output" class="empty-state">Genera un resumen para verlo aquí.</div></article>
+      <article class="panel output-panel"><div class="panel-heading"><p class="number">04</p><h2>Autoevaluación</h2></div><form id="quiz-output" class="empty-state">Genera un cuestionario para responderlo aquí.</form></article>
+    </section>
+
+    <section class="grid bottom-grid">
+      <article class="panel">
+        <div class="panel-heading"><p class="number">05</p><h2>Retroalimentación</h2></div>
+        <p class="hint">Envía las respuestas marcadas; las abiertas se valoran con evidencia recuperada.</p>
+        <button id="feedback-button" type="button" disabled>Revisar respuestas</button>
+        <div id="feedback-output" class="feedback-output"></div>
+      </article>
+      <article class="panel">
+        <div class="panel-heading"><p class="number">06</p><h2>Editar o exportar</h2></div>
+        <div class="material-tools">
+          <label>Material ID<input id="material-id" type="number" min="1" placeholder="Se completa al generar"></label>
+          <div class="actions three-actions"><button id="load-material" type="button" class="secondary">Cargar</button><button id="save-material" type="button" class="secondary">Guardar edición</button><button id="export-material" type="button">Exportar MD</button></div>
+          <label>Contenido editable (JSON)<textarea id="material-editor" rows="8" placeholder="Carga un material para editarlo."></textarea></label>
+        </div>
+      </article>
+    </section>
+  </main>
+  <script src="/ui/app.js"></script>
+</body>
+</html>
