@@ -10,7 +10,7 @@ El resumen recupera únicamente chunks indexados en ChromaDB, limita el contexto
 
 El cuestionario recupera evidencia distinta desde ChromaDB, solicita a Gemini preguntas de opción múltiple y abiertas, y valida localmente que el número de preguntas, las cuatro opciones distintas y cada timestamp correspondan a evidencia recuperada. Si no hay evidencia suficiente, devuelve listas vacías con una nota explicativa, sin inventar preguntas.
 
-Los recursos generados se almacenan en SQLite con un `material_id`: pueden consultarse o reemplazarse mediante API sin volver a consumir Gemini. También se exportan localmente a JSON o Markdown dentro de `data/exports`. Para ingestas largas, `POST /api/v1/videos/ingest/async` devuelve de inmediato un `video_id`; la interfaz puede sondear `GET /api/v1/videos/{video_id}/progress` hasta obtener el estado `indexed` o `failed`.
+Los recursos generados se almacenan en SQLite con un `material_id`: pueden consultarse o reemplazarse mediante API sin volver a consumir Gemini. Cada edición crea una versión histórica y los usuarios autorizados pueden restaurar una versión previa. También se exportan localmente a JSON, Markdown, PDF y DOCX dentro de `data/exports`. Para ingestas largas, `POST /api/v1/videos/ingest/async` devuelve de inmediato un `video_id`; la interfaz puede sondear `GET /api/v1/videos/{video_id}/progress` hasta obtener el estado `indexed` o `failed`.
 
 Al solicitar un cuestionario, el cliente puede configurar uno o varios niveles de Bloom: `remember`, `understand`, `apply`, `analyze`, `evaluate` y `create`. Cada pregunta conserva su `bloom_level`. La retroalimentación de opción múltiple es inmediata y local; las respuestas abiertas se evalúan con Gemini y evidencia RAG, conservando el timestamp de respaldo del cuestionario.
 
@@ -27,7 +27,7 @@ La interfaz visual integrada está disponible en `http://127.0.0.1:8000/ui/`. Pe
 
 ## Inicio local
 
-Requiere Python 3.11+, FFmpeg y una clave gratuita de Google AI Studio. La clave de YouTube Data API v3 es opcional para el futuro buscador.
+Requiere Python 3.11+, FFmpeg y una clave gratuita de Google AI Studio. La clave de YouTube Data API v3 es opcional para el futuro buscador. Las dependencias `python-docx` y `reportlab`, incluidas en `backend/requirements.txt`, habilitan las exportaciones DOCX y PDF.
 
 Si YouTube rechaza un video público con mensajes como `The page needs to be reloaded`, exporta las cookies de la sesión autenticada en formato Netscape y configura su ubicación mediante `YTDLP_COOKIE_FILE`. El archivo de cookies es confidencial y no debe subirse al repositorio.
 
@@ -39,7 +39,7 @@ cd backend
 uvicorn app.main:app --reload
 \`\`\`
 
-Después de iniciar el servidor, abre `http://127.0.0.1:8000/ui/` y sigue el orden de los seis paneles. Antes de probar, configura `GEMINI_API_KEY` en `.env` y verifica que FFmpeg esté instalado y disponible en `PATH`. Las cookies Netscape en `data/cookies.txt` sólo deben renovarse si YouTube bloquea la ingesta de un video nuevo. La documentación queda en `http://127.0.0.1:8000/docs`; `GET /api/v1/health` comprueba que la API levantó. Consulta `docs/CHANGELOG.md` para el historial por sprint.
+Después de iniciar el servidor, abre `http://127.0.0.1:8000/ui/` y sigue el flujo de autenticación, ingesta y generación. Antes de probar, configura `GEMINI_API_KEY` y `JWT_SECRET_KEY` en `.env`, y verifica que FFmpeg esté instalado y disponible en `PATH`. Las cookies Netscape en `data/cookies.txt` sólo deben renovarse si YouTube bloquea la ingesta de un video nuevo. La documentación queda en `http://127.0.0.1:8000/docs`; `GET /api/v1/health` comprueba que la API levantó. Consulta `docs/CHANGELOG.md` para el historial por sprint.
 
 ## Carpetas
 
@@ -58,4 +58,4 @@ Después de iniciar el servidor, abre `http://127.0.0.1:8000/ui/` y sigue el ord
 
 ## Estado del alcance
 
-Los cinco sprints previstos han sido implementados. Las ampliaciones futuras pueden incorporar interfaz web, autenticación de estudiantes o nuevos formatos de exportación, sin alterar el pipeline local actual.
+Los cinco sprints previstos han sido implementados. Las ampliaciones futuras pueden incorporar nuevos formatos o mejoras de interfaz, sin alterar el pipeline local actual.

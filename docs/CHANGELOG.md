@@ -13,6 +13,17 @@ Este archivo registra los incrementos funcionales del prototipo de tesis.
 - Evaluación de preguntas abiertas con Gemini y contexto RAG recuperado de ChromaDB; se validan índices y timestamps antes de devolver la retroalimentación.
 - Pruebas unitarias sin proveedores externos para Bloom, respuestas duplicadas, evidencia temporal y retroalimentación abierta.
 
+## Actualización posterior - edición, restauración y exportación
+
+### Implementado
+
+- Restauración de versiones mediante `POST /api/v1/materials/{material_id}/versions/{version_id}/restore`.
+- Identificación del último editor en la respuesta de materiales y en el historial.
+- Exportación estructurada a PDF con ReportLab mediante `format=pdf`.
+- Exportación estructurada a DOCX con python-docx mediante `format=docx`.
+- Content-Types documentados para `json`, `markdown`, `pdf` y `docx`.
+- Guía de instalación Windows, configuración de `.env`, pruebas automatizadas y solución de problemas en `backend/README.md`.
+
 ### Pendiente
 
 - No quedan historias de usuario planificadas en los cinco sprints iniciales.

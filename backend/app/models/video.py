@@ -1,6 +1,8 @@
 """Metadatos mínimos de cada video procesado."""
 
-from sqlalchemy import Float, Integer, String
+from datetime import datetime
+
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
@@ -21,3 +23,5 @@ class Video(Base):
     progress_stage: Mapped[str] = mapped_column(String(40), default="completed")
     progress_percent: Mapped[int] = mapped_column(Integer, default=100)
     processing_seconds: Mapped[float] = mapped_column(Float, default=0.0)
+    owner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())

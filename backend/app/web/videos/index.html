@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mis videos · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
+<body><main class="shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1>Mis <span>videos</span></h1></div>
+<div id="user-bar" class="user-bar"></div></header>
+<nav class="steps" aria-label="Navegación">
+  <a href="/ui/groups/">← Mis grupos</a><i></i>
+  <a href="/ui/video/">Importar nuevo</a>
+</nav>
+<div id="notice" class="notice" role="status" style="display:none"></div>
+
+<section class="panel">
+  <div class="panel-heading"><p class="number">HISTORIAL</p><h2>Videos procesados</h2></div>
+  <p class="hint">Solo se muestran los videos que tú ingestaste. Haz clic en un video para reabrirlo o publícalo como tema en uno de tus grupos.</p>
+  <div class="vid-filters">
+    <label class="vid-filter-label">Filtrar por estado
+      <select id="status-filter">
+        <option value="">Todos</option>
+        <option value="indexed">Indexado</option>
+        <option value="queued">En cola</option>
+        <option value="processing">Procesando</option>
+        <option value="failed">Fallido</option>
+      </select>
+    </label>
+  </div>
+  <div id="videos-list" class="empty-state">Cargando…</div>
+  <div id="pagination" class="pagination" style="margin-top:16px"></div>
+</section>
+
+<!-- Modal publicar como tema -->
+<div id="publish-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal">
+    <h3 id="modal-title">Publicar como tema</h3>
+    <p id="modal-video-name" class="hint"></p>
+    <form id="publish-form" class="stack">
+      <label>Grupo<select id="publish-group" required></select></label>
+      <label>Título del tema<input id="publish-title" type="text" required></label>
+      <label>Descripción (opcional)<input id="publish-desc" type="text"></label>
+      <div class="actions two-actions">
+        <button type="button" id="modal-cancel" class="secondary">Cancelar</button>
+        <button type="submit" id="modal-submit">Publicar →</button>
+      </div>
+    </form>
+  </div>
+</div>
+</main><script type="module" src="/ui/videos/page.js"></script></body></html>

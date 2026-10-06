@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Grupo · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
+<body><main class="shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1 id="group-title">Grupo</h1></div>
+<div id="user-bar" class="user-bar"></div></header>
+<nav class="steps" aria-label="Navegación"><a href="/ui/groups/">← Mis grupos</a></nav>
+<div id="notice" class="notice" role="status" style="display:none"></div>
+
+<!-- Temas -->
+<section class="panel accent-panel">
+  <div class="panel-heading"><p class="number">01</p><h2>Temas</h2></div>
+  <form id="topic-form" class="topic-create-form stack" style="max-width:560px">
+    <label>Título del tema<input id="topic-title" type="text" required placeholder="Ej: Fotosíntesis"></label>
+    <label>Descripción (opcional)<input id="topic-desc" type="text" placeholder="Breve descripción del tema"></label>
+    <label>Video ID (opcional)<input id="topic-video" type="number" min="1" placeholder="ID del video indexado"></label>
+    <button id="topic-btn" type="submit">Agregar tema →</button>
+  </form>
+  <div id="topics-list" class="topics-list empty-state" style="margin-top:18px">Cargando temas…</div>
+</section>
+
+<!-- Miembros (solo admin) -->
+<section class="panel" id="members-section" style="margin-top:18px;display:none">
+  <div class="panel-heading"><p class="number">02</p><h2>Miembros</h2></div>
+  <form id="member-form" class="stack" style="max-width:360px">
+    <label>ID de usuario<input id="member-uid" type="number" min="1" placeholder="ID numérico del usuario"></label>
+    <button id="member-btn" type="submit" class="secondary">Agregar miembro →</button>
+  </form>
+  <div id="members-list" class="members-list" style="margin-top:14px"></div>
+</section>
+</main><script type="module" src="/ui/groups/detail/page.js"></script></body></html>

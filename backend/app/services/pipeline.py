@@ -7,9 +7,12 @@ no descargue modelos ni requiera GPU. Whisper y ChromaDB siempre se ejecutan loc
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 from typing import Any
 from urllib.parse import urlparse
 
@@ -21,6 +24,12 @@ from app.core.errors import PipelineError
 from app.repositories.video_repository import VideoRepository
 from app.schemas.contracts import BloomLevel, QuizResponse, SummaryResponse
 from app.services.material_service import MaterialService
+from app.services.providers import (
+    GeminiProvider,
+    ModelProvider,
+    OpenAIProvider,
+    get_model_provider,
+)
 
 SUPPORTED_LANGUAGES = {"es", "en"}
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}
@@ -389,8 +398,6 @@ class VectorStoreService:
 
     def retrieve(self, video_id: int, query: str) -> list[dict[str, Any]]:
         """Recupera pocos chunks, limitando después el contexto por caracteres."""
-        # Chroma rechaza un n_results mayor que los registros filtrados; calcularlo
-        # también evita enviar solicitudes inútiles a Gemini para un video vacío.
         available = len(self.collection.get(where={"video_id": video_id}, include=[]).get("ids", []))
         if not available:
             return []
@@ -403,19 +410,22 @@ class VectorStoreService:
         metadata = result.get("metadatas", [[]])[0]
         return [{"text": text, **meta} for text, meta in zip(documents, metadata)]
 
+    def delete_by_video(self, video_id: int) -> int:
+        """Elimina todos los chunks de un video de ChromaDB. Devuelve el número borrado."""
+        ids = self.collection.get(where={"video_id": video_id}, include=[]).get("ids", [])
+        if ids:
+            self.collection.delete(ids=ids)
+        return len(ids)
 
-class GeminiService:
-    """Cliente Gemini que limita el contexto y fuerza JSON basado en evidencia RAG."""
 
-    SYSTEM_INSTRUCTION = """Eres un generador didáctico con groundedness estricto.
-Usa exclusivamente la EVIDENCIA RECUPERADA. No uses conocimientos externos ni inventes hechos,
-definiciones, distractores o timestamps. Si la evidencia no basta, devuelve evidence_sufficient=false,
-explica insuficiencia y deja las listas vacías. Cada timestamp debe existir en la evidencia."""
+class GeminiService(ModelProvider):
+    """Fachada compatible con código existente que delega en el ModelProvider configurado."""
 
-    def __init__(self, settings: Settings) -> None:
-        if not settings.gemini_api_key:
-            raise PipelineError("Falta GEMINI_API_KEY en el entorno.", code="GEMINI_API_KEY_MISSING", status_code=503)
-        self.settings = settings
+    SYSTEM_INSTRUCTION = ModelProvider.SYSTEM_INSTRUCTION
+
+    def __init__(self, settings: Settings | None = None, *, provider_name: str | None = None, model_id: str | None = None) -> None:
+        self.settings = settings or get_settings()
+        self.provider = get_model_provider(self.settings, provider_name=provider_name, model_id=model_id)
 
     def generate_json(
         self,
@@ -423,46 +433,7 @@ explica insuficiencia y deja las listas vacías. Cada timestamp debe existir en 
         evidence: list[dict[str, Any]],
         response_schema: type[BaseModel] | None = None,
     ) -> str:
-        from google import genai
-        from google.genai import types
-
-        # Tope por caracteres: aprox. 3k tokens de entrada para no agotar la capa gratuita.
-        context = build_evidence_context(evidence, self.settings.max_gemini_context_chars)
-        if not context:
-            raise PipelineError("No hay evidencia indexada suficiente.", code="NO_RAG_EVIDENCE", status_code=422)
-        client = genai.Client(api_key=self.settings.gemini_api_key)
-        config = types.GenerateContentConfig(
-            system_instruction=self.SYSTEM_INSTRUCTION,
-            response_mime_type="application/json",
-            temperature=0.1,
-            max_output_tokens=self.settings.max_gemini_output_tokens,
-            response_schema=response_schema,
-        )
-        for attempt in range(2):
-            try:
-                response = client.models.generate_content(
-                    model=self.settings.gemini_model,
-                    contents=f"{task}\n\nEVIDENCIA RECUPERADA:\n{context}",
-                    config=config,
-                )
-                break
-            except Exception as error:
-                status_code = getattr(error, "status_code", None)
-                if status_code in {429, 500, 503} and attempt == 0:
-                    time.sleep(1)
-                    continue
-                if status_code in {429, 500, 503}:
-                    raise PipelineError(
-                        "Gemini no está disponible temporalmente. Intenta de nuevo en unos segundos.",
-                        code="GEMINI_UNAVAILABLE", status_code=503,
-                    ) from error
-                raise PipelineError(
-                    "Gemini no pudo generar el recurso solicitado.",
-                    code="GEMINI_REQUEST_FAILED", status_code=502,
-                ) from error
-        if not response.text:
-            raise PipelineError("Gemini no devolvió contenido.", code="EMPTY_GEMINI_RESPONSE", status_code=502)
-        return response.text
+        return self.provider.generate_json(task, evidence, response_schema)
 
 
 class PipelineService:
@@ -476,9 +447,9 @@ class PipelineService:
         self.vectors = VectorStoreService(self.settings)
         self.repository = VideoRepository()
 
-    def queue_ingest(self, url: str, session: Session) -> dict[str, Any]:
+    def queue_ingest(self, url: str, session: Session, *, owner_id: int | None = None) -> dict[str, Any]:
         """Validate metadata and create a pollable job before expensive local work begins."""
-        video_info = self.youtube.inspect(url, self.settings)  # 1. validar antes de descargar
+        video_info = self.youtube.inspect(url, self.settings)
         existing = self.repository.get_by_youtube_id(session, video_info.youtube_id)
         if existing and existing.status == "indexed":
             return {"video_id": existing.id, "status": existing.status, "progress_stage": existing.progress_stage,
@@ -491,16 +462,16 @@ class PipelineService:
             session, youtube_id=video_info.youtube_id, source_url=video_info.url, title=video_info.title,
             language=video_info.language, duration_seconds=video_info.duration_seconds,
             transcript_path=str(transcript_path), status="queued", progress_stage="queued",
-            progress_percent=0, processing_seconds=0.0,
+            progress_percent=0, processing_seconds=0.0, owner_id=owner_id,
         )
         if existing:
             self.repository.update_progress(session, video, "queued", 0, status="queued")
         return {"video_id": video.id, "status": video.status, "progress_stage": video.progress_stage,
                 "progress_percent": video.progress_percent, "queued": True}
 
-    def ingest(self, url: str, session: Session) -> dict[str, Any]:
+    def ingest(self, url: str, session: Session, *, owner_id: int | None = None) -> dict[str, Any]:
         """Preserve the original synchronous endpoint while using the same job state machine."""
-        job = self.queue_ingest(url, session)
+        job = self.queue_ingest(url, session, owner_id=owner_id)
         if job["status"] == "indexed":
             video = self.repository.get(session, job["video_id"])
             assert video is not None
@@ -541,17 +512,19 @@ class PipelineService:
             session.commit()
             raise PipelineError("Falló el pipeline de ingesta.", code="INGESTION_FAILED", status_code=500) from error
 
-    def summary(self, video_id: int, focus: str, session: Session) -> SummaryResponse:
+    def summary(self, video_id: int, focus: str, session: Session, *, model_provider: str | None = None, model_id: str | None = None) -> SummaryResponse:
         self._assert_indexed(video_id, session)
         evidence = self.vectors.retrieve(video_id, focus)
         prompt = """Genera el resumen didáctico solicitado a partir de la evidencia. La sinopsis debe
 tener menos de 200 palabras. Los timestamps deben tener el formato HH:MM:SS y coincidir exactamente
 con los límites de tiempo presentes en la evidencia recuperada."""
-        raw_response = GeminiService(self.settings).generate_json(
+        raw_response = GeminiService(self.settings, provider_name=model_provider, model_id=model_id).generate_json(
             prompt, evidence, response_schema=SummaryResponse,
         )
+        video = self.repository.get(session, video_id)
         return MaterialService().save_generated(
             session, video_id, "summary", parse_grounded_summary(raw_response, evidence),
+            owner_id=video.owner_id if video else None,
         )
 
     def quiz(
@@ -561,6 +534,9 @@ con los límites de tiempo presentes en la evidencia recuperada."""
         open_question_count: int,
         bloom_levels: list[BloomLevel],
         session: Session,
+        *,
+        model_provider: str | None = None,
+        model_id: str | None = None,
     ) -> QuizResponse:
         self._assert_indexed(video_id, session)
         evidence = self.vectors.retrieve(video_id, "hechos, definiciones, procesos y ejemplos para evaluación")
@@ -573,12 +549,14 @@ question, expected_points y evidence_timestamp. Toda pregunta debe contener bloo
 uno de estos niveles solicitados: {', '.join(level.value for level in bloom_levels)}. Si la evidencia no basta, establece
 evidence_sufficient=false, explica la insuficiencia y devuelve ambas listas vacías. No inventes
 contenido ni timestamps."""
-        raw_response = GeminiService(self.settings).generate_json(
+        raw_response = GeminiService(self.settings, provider_name=model_provider, model_id=model_id).generate_json(
             prompt, evidence, response_schema=QuizResponse,
         )
+        video = self.repository.get(session, video_id)
         return MaterialService().save_generated(
             session, video_id, "quiz",
             parse_grounded_quiz(raw_response, evidence, multiple_choice_count, open_question_count, bloom_levels),
+            owner_id=video.owner_id if video else None,
         )
 
     @staticmethod

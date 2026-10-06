@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Acceso · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
+<body><main class="shell auth-shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1>Aula<span>Video</span></h1></div></header>
+<section class="panel accent-panel auth-panel">
+  <div id="notice" class="notice" role="status" style="display:none"></div>
+
+  <form id="login-form" class="stack auth-form">
+    <label>Correo electrónico<input id="login-email" type="email" required autocomplete="email" placeholder="tu@correo.com"></label>
+    <label>Contraseña<input id="login-password" type="password" required autocomplete="current-password" placeholder="••••••••"></label>
+    <div class="auth-actions" role="tablist" aria-label="Acceso">
+      <button class="auth-choice auth-choice--active" type="submit" id="login-btn" data-tab="login" role="tab" aria-selected="true">Iniciar sesión</button>
+      <button class="auth-choice secondary" type="button" data-tab="register" role="tab" aria-selected="false">Registrarse</button>
+    </div>
+  </form>
+
+  <form id="register-form" class="stack auth-form" style="display:none">
+    <label>Nombre<input id="reg-name" type="text" required autocomplete="name" placeholder="Tu nombre"></label>
+    <label>Correo electrónico<input id="reg-email" type="email" required autocomplete="email" placeholder="tu@correo.com"></label>
+    <label>Contraseña<input id="reg-password" type="password" required autocomplete="new-password" placeholder="Mínimo 8 caracteres"></label>
+    <div class="auth-actions" role="tablist" aria-label="Acceso">
+      <button class="auth-choice secondary" type="button" data-tab="login" role="tab" aria-selected="false">Iniciar sesión</button>
+      <button class="auth-choice auth-choice--active" id="register-btn" type="submit" data-tab="register" role="tab" aria-selected="true">Registrarse</button>
+    </div>
+  </form>
+</section>
+</main><script type="module" src="/ui/auth/page.js"></script></body></html>

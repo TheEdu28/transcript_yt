@@ -1,39 +1,80 @@
+# Entornos y cachés de Python
+.venv/
+venv/
+env/
+backend/.venv/
 __pycache__/
 *.py[cod]
-.venv/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Configuración local y secretos
 .env
+.env.*
+!.env.example
+!backend/.env.example
+*.secret
+*.secrets
+*.pem
+*.key
+*.p12
+*.pfx
 
-# Cookies de sesión (confidencial)
+# Cookies y credenciales exportadas
 cookies.txt
-*.txt
+cookies*.txt
+**/cookies.txt
+**/cookies*.txt
 
-# Datos generados localmente
-data/*
-!data/transcripts/
-!data/chroma/
-!data/metadata/
-!data/exports/
-data/transcripts/*
-!data/transcripts/raw/
-!data/transcripts/processed/
-data/transcripts/raw/*
-!data/transcripts/raw/.gitkeep
-data/transcripts/processed/*
-!data/transcripts/processed/.gitkeep
-data/chroma/*
-!data/chroma/.gitkeep
-data/chroma_db/
-data/metadata/*
-!data/metadata/.gitkeep
-data/exports/*
-!data/exports/.gitkeep
+# Bases de datos y archivos de desarrollo locales
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.sqlite-journal
 
-# Backend data
-backend/data/
+# Datos generados por ingesta, transcripción, RAG y exportación
+/data/audio/
+/data/chroma/
+/data/chroma_db/
+/data/metadata/
+/data/transcripts/
+/data/exports/
+/data/audio/*
+/data/chroma/*
+/data/chroma_db/*
+/data/metadata/*
+/data/transcripts/*
+/data/transcripts/**/*
+/data/exports/*
+/backend/data/
+backend/gemini_response*.json
+*.webm
+*.wav
+*.mp3
+*.m4a
+*.bin
 
-# Respuestas cacheadas de Gemini
-*.json
-!package.json
+# Modelos y cachés descargados localmente
+.cache/
+cache/
+**/.cache/
+**/huggingface/
+**/torch/
 
+# Archivos temporales y del sistema
 .ipynb_checkpoints/
+*.log
+*.tmp
+*.bak
+*.swp
+.DS_Store
+Thumbs.db
+
+# Mantener los marcadores de directorios vacíos
+!/data/
+!/data/**/
+!.gitkeep

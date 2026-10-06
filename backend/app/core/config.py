@@ -14,8 +14,18 @@ class Settings(BaseSettings):
     """Carga parámetros del entorno y conserva los datos fuera de /backend."""
 
     model_config = SettingsConfigDict(env_file=PROJECT_ROOT / ".env", extra="ignore")
+    active_model_provider: str = "gemini"
+    active_model_id: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash"
+    gemini_model: str = "gemini-2.0-flash-lite"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-4o-mini"
+    openai_base_url: str | None = None
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.1-8b-instant"
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 60
     whisper_model: str = "base"
     whisper_device: str = "cpu"
     whisper_compute_type: str = "int8"

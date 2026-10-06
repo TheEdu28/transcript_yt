@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mis grupos · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
+<body><main class="shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1>Mis <span>grupos</span></h1></div>
+<div id="user-bar" class="user-bar"></div></header>
+<div id="notice" class="notice" role="status" style="display:none"></div>
+
+<section class="panel accent-panel">
+  <div class="panel-heading"><p class="number">01</p><h2>Crear grupo</h2></div>
+  <a class="primary-action" href="/ui/video/">Procesar un video →</a>
+  <form id="create-form" class="stack" style="max-width:480px">
+    <label>Nombre del grupo<input id="group-name" type="text" required placeholder="Ej: Biología 3°A"></label>
+    <button id="create-btn" type="submit">Crear grupo →</button>
+  </form>
+</section>
+
+<section class="panel" style="margin-top:18px">
+  <div class="panel-heading"><p class="number">02</p><h2>Mis grupos</h2></div>
+  <div id="groups-list" class="groups-grid empty-state">Cargando grupos…</div>
+</section>
+</main><script type="module" src="/ui/groups/page.js"></script></body></html>
