@@ -11,10 +11,19 @@ export const auth = {
 
 export async function request(path, options = {}) {
   const headers = { ...(options.headers || {}) };
+  const isAuthEndpoint = path.startsWith("/auth/login") || path.startsWith("/auth/register");
   const token = auth.token();
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (token && !isAuthEndpoint) headers["Authorization"] = `Bearer ${token}`;
+
   const response = await fetch(`/api/v1${path}`, { ...options, headers });
-  if (response.status === 401) { auth.clear(); window.location.assign("/ui/auth/"); return; }
+  if (response.status === 401 && !isAuthEndpoint) {
+    auth.clear();
+    if (!window.location.pathname.startsWith("/ui/auth/")) {
+      window.location.assign("/ui/auth/");
+    }
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.detail?.message || "Sesión expirada o no autorizada.");
+  }
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     throw new Error(payload.detail?.message || `Error ${response.status}`);
@@ -99,9 +108,42 @@ export async function apiPublishVideoAsTopic(groupId, videoId, title, descriptio
 }
 
 // --- Materials ---
-export async function apiListMyMaterials() {
-  return request("/materials");
+export async function apiListMyMaterials(videoId = null) {
+  const query = videoId ? `?video_id=${videoId}` : "";
+  return request(`/materials${query}`);
 }
 export async function apiGetMaterial(materialId) {
   return request(`/materials/${materialId}`);
 }
+export async function apiGetTopicMaterials(groupId, topicId) {
+  return request(`/groups/${groupId}/topics/${topicId}/materials`);
+}
+
+// --- Grades & Attempts ---
+export async function apiGetGroupGrades(groupId) {
+  return request(`/groups/${groupId}/grades`);
+}
+export async function apiUpdateAttemptGrade(groupId, topicId, attemptId, finalScore, reviewNotes = null) {
+  return request(`/groups/${groupId}/topics/${topicId}/attempts/${attemptId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ final_score: finalScore, review_notes: reviewNotes }),
+  });
+}
+export async function apiSubmitAttempt(groupId, topicId, payload) {
+  return request(`/groups/${groupId}/topics/${topicId}/attempts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+export async function apiGetMyTopicAttempts(groupId, topicId) {
+  return request(`/groups/${groupId}/topics/${topicId}/my-attempts`);
+}
+export async function apiGetAllTopicAttempts(groupId, topicId) {
+  return request(`/groups/${groupId}/topics/${topicId}/attempts`);
+}
+export async function apiGetTopicSummary(groupId, topicId) {
+  return request(`/groups/${groupId}/topics/${topicId}/summary`);
+}
+

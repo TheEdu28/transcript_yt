@@ -271,11 +271,62 @@ class QuizAttemptGradingService:
             for answer in open_answers
         ]
 
-        query = " \n ".join(
-            f"{quiz.open_questions[a.question_index].question} {' '.join(quiz.open_questions[a.question_index].expected_points)}"
-            for a in open_answers
-        )
-        evidence = self.vectors.retrieve(video_id, query)
+        chunks_by_index: dict[int, dict[str, Any]] = {}
+        if hasattr(self.vectors, "collection") and self.vectors.collection is not None:
+            try:
+                all_video_data = self.vectors.collection.get(where={"video_id": video_id})
+                metadatas = all_video_data.get("metadatas") or []
+                documents = all_video_data.get("documents") or []
+                for doc, meta in zip(documents, metadatas):
+                    chunk_idx = meta.get("chunk_index")
+                    if chunk_idx is not None:
+                        chunks_by_index[chunk_idx] = {
+                            "chunk_index": chunk_idx,
+                            "text": doc,
+                            "start": meta.get("start"),
+                            "end": meta.get("end"),
+                        }
+            except Exception:
+                pass
+
+        selected_chunks: dict[int, dict[str, Any]] = {}
+
+        for ans in open_answers:
+            if ans.question_index < len(quiz.open_questions):
+                ts = quiz.open_questions[ans.question_index].evidence_timestamp
+                matched = [
+                    c for c in chunks_by_index.values()
+                    if c.get("start") == ts or c.get("end") == ts or (
+                        c.get("start") and c.get("end") and c["start"] <= ts <= c["end"]
+                    )
+                ]
+                for c in matched:
+                    selected_chunks[c["chunk_index"]] = c
+
+        for ans in open_answers:
+            if ans.question_index < len(quiz.open_questions):
+                q = quiz.open_questions[ans.question_index]
+                q_query = f"{q.question} {' '.join(q.expected_points)}"
+                try:
+                    sem_evidence = self.vectors.retrieve(video_id, q_query)
+                    for item in sem_evidence:
+                        idx = item.get("chunk_index")
+                        if idx is not None:
+                            if idx not in selected_chunks:
+                                selected_chunks[idx] = item
+                        else:
+                            selected_chunks[len(selected_chunks)] = item
+                except Exception:
+                    pass
+
+        evidence = [selected_chunks[k] for k in sorted(selected_chunks.keys())]
+        if not evidence:
+            query = " \n ".join(
+                f"{quiz.open_questions[a.question_index].question} {' '.join(quiz.open_questions[a.question_index].expected_points)}"
+                for a in open_answers
+            )
+            evidence = self.vectors.retrieve(video_id, query)
+
         if not evidence:
             raise PipelineError(
                 "No se pudo recuperar la evidencia necesaria para calificar las preguntas abiertas.",

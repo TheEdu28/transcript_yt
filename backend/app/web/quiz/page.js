@@ -1,4 +1,4 @@
-import { apiGetVideo, apiListMyVideos, auth, fetchModels, request } from "/ui/api.js";
+import { apiGetTopicMaterials, apiGetVideo, apiListMyVideos, apiSubmitAttempt, auth, fetchModels, request } from "/ui/api.js";
 import {
   escapeHtml,
   getPositiveIntParam,
@@ -17,6 +17,8 @@ renderUserBar();
 
 let videoId = getPositiveIntParam("video");
 let materialId = getPositiveIntParam("material");
+let groupId = getPositiveIntParam("group");
+let topicId = getPositiveIntParam("topic");
 let activeMaterialId = materialId;
 
 const selectedBloomLevels = () =>
@@ -230,6 +232,55 @@ function setupExportHandlers() {
 async function init() {
   setupExportHandlers();
 
+  // Si venimos desde un tema de grupo, cargar el material compartido del tema
+  if (groupId && topicId) {
+    try {
+      const topicMats = await apiGetTopicMaterials(groupId, topicId);
+      if (topicMats?.video_id && !videoId) videoId = topicMats.video_id;
+
+      // Actualizar enlace para volver al grupo
+      const navSteps = document.querySelector(".steps");
+      if (navSteps && !document.getElementById("back-to-group-link")) {
+        const backLink = document.createElement("a");
+        backLink.id = "back-to-group-link";
+        backLink.href = `/ui/groups/detail/?group=${groupId}`;
+        backLink.style.color = "var(--blue)";
+        backLink.style.fontWeight = "700";
+        backLink.innerHTML = "← Volver al Grupo";
+        navSteps.prepend(backLink);
+        const sep = document.createElement("i");
+        navSteps.insertBefore(sep, navSteps.children[1]);
+      }
+
+      if (topicMats?.quiz) {
+        activeMaterialId = topicMats.quiz.id;
+        materialId = topicMats.quiz.id;
+        renderQuiz(topicMats.quiz.content);
+        updateExportVisibility(topicMats.quiz.id);
+
+        const banner = document.createElement("div");
+        banner.className = "notice";
+        banner.style.borderLeft = "4px solid var(--violet)";
+        banner.style.marginBottom = "14px";
+        banner.innerHTML = `<strong>Evaluación del tema:</strong> ${escapeHtml(topicMats.title)} · <em>Las respuestas se calificarán y registrarán en el libro de calificaciones del grupo.</em>`;
+        byId("quiz-output")?.parentNode.insertBefore(banner, byId("quiz-output"));
+
+        if (topicMats.video_id) {
+          videoId = topicMats.video_id;
+          byId("video-label").textContent = `Video ID: ${videoId}`;
+          byId("summary-link").href = urlFor("/ui/resumen/", { video: videoId, group: groupId, topic: topicId });
+          byId("material-link").href = urlFor("/ui/material/", { video: videoId, material: materialId });
+          loadVideoPlayer(videoId);
+        }
+        showNotice(`Evaluación del tema «${topicMats.title}» lista para responder.`, "info");
+        return;
+      }
+    } catch (err) {
+      console.warn("No se pudo obtener el material del tema del grupo:", err);
+      showNotice(err.message, "error");
+    }
+  }
+
   // Si no hay video en la URL, pero sí material
   if (!videoId && materialId) {
     try {
@@ -314,9 +365,28 @@ byId("generate-button").addEventListener("click", async () => {
       activeMaterialId = quiz.material_id;
       renderQuiz(quiz);
       updateExportVisibility(quiz.material_id);
-      replaceUrl("/ui/quiz/", { video: videoId, material: quiz.material_id });
+      
+      const pageParams = { video: videoId, material: quiz.material_id };
+      if (groupId) pageParams.group = groupId;
+      if (topicId) pageParams.topic = topicId;
+      replaceUrl("/ui/quiz/", pageParams);
       byId("material-link").href = urlFor("/ui/material/", { video: videoId, material: quiz.material_id });
-      showNotice(`Cuestionario creado como material ${quiz.material_id}.`, "success");
+
+      if (groupId && topicId) {
+        try {
+          await request(`/groups/${groupId}/topics/${topicId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ material_id: quiz.material_id, video_id: videoId }),
+          });
+          showNotice(`¡Cuestionario #${quiz.material_id} creado y vinculado exitosamente al tema del grupo!`, "success");
+        } catch (linkErr) {
+          console.warn("No se pudo vincular automáticamente el cuestionario al tema:", linkErr);
+          showNotice(`Cuestionario creado como material ${quiz.material_id}.`, "success");
+        }
+      } else {
+        showNotice(`Cuestionario creado como material ${quiz.material_id}.`, "success");
+      }
     } catch (error) {
       showNotice(error.message, "error");
     }
@@ -344,10 +414,28 @@ byId("feedback-button").addEventListener("click", async () => {
       });
 
       if (!multiple_choice_answers.length && !open_answers.length) {
-        return showNotice("Responde al menos una pregunta antes de solicitar retroalimentación.", "error");
+        return showNotice("Responde al menos una pregunta antes de solicitar revisión.", "error");
       }
 
-      showNotice("Revisando tus respuestas…");
+      showNotice("Evaluando tus respuestas con evidencia RAG…");
+
+      // Si estamos en un tema de grupo, registrar el intento oficial en el grupo
+      let attemptResult = null;
+      if (groupId && topicId) {
+        try {
+          const attemptPayload = {
+            material_id: currentMaterialId,
+            multiple_choice_answers: multiple_choice_answers,
+            answers: multiple_choice_answers,
+            open_answers: open_answers,
+          };
+          attemptResult = await apiSubmitAttempt(groupId, topicId, attemptPayload);
+        } catch (attemptErr) {
+          console.warn("No se pudo registrar intento en grupo, evaluando solo retroalimentación:", attemptErr);
+        }
+      }
+
+      // Obtener la retroalimentación detallada
       const feedback = await request(`/materials/${currentMaterialId}/feedback`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -358,7 +446,7 @@ byId("feedback-button").addEventListener("click", async () => {
         .map(
           (item) => `
           <div class="feedback-item ${item.is_correct ? "good" : "bad"}">
-            <strong>Pregunta ${item.question_index + 1}: ${item.is_correct ? "Correcta" : "Por revisar"}</strong><br>
+            <strong>Pregunta ${item.question_index + 1}: ${item.is_correct ? "Correcta ✓" : "Por revisar ✗"}</strong><br>
             ${escapeHtml(item.explanation)}
           </div>`
         )
@@ -375,8 +463,22 @@ byId("feedback-button").addEventListener("click", async () => {
         )
         .join("");
 
-      byId("feedback-output").innerHTML = closed + open || "No hubo respuestas para revisar.";
-      showNotice("Retroalimentación lista.", "success");
+      let scoreBanner = "";
+      if (attemptResult) {
+        const score = attemptResult.final_score !== null ? attemptResult.final_score : attemptResult.raw_score;
+        scoreBanner = `
+          <div style="background:#eff6ff;border:2px solid var(--blue);border-radius:10px;padding:14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+            <div>
+              <strong style="font-size:16px;color:var(--blue)">Calificación registrada: ${score !== null ? score.toFixed(1) : '—'} / 100</strong>
+              <p style="margin:2px 0 0;font-size:12px;color:var(--muted)">Intento #${attemptResult.id} guardado en el grupo. Tu profesor podrá revisarlo.</p>
+            </div>
+            <a href="/ui/groups/detail/?group=${groupId}" class="secondary" style="text-decoration:none;font-size:12px;padding:6px 12px">Ver mis calificaciones →</a>
+          </div>
+        `;
+      }
+
+      byId("feedback-output").innerHTML = scoreBanner + (closed + open || "No hubo respuestas para revisar.");
+      showNotice("Evaluación completada con éxito.", "success");
     } catch (error) {
       showNotice(error.message, "error");
     }

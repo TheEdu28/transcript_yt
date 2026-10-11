@@ -110,3 +110,10 @@ button { border:0; border-radius:9px; padding:11px 14px; color:#fff; background:
 .export-btn--docx:hover { background:#eff6ff; border-color:#93c5fd; color:#2563eb; }
 .export-btn--md:hover { background:#f0fdf4; border-color:#86efac; color:#16a34a; }
 
+/* Responsive para pestañas y layout de temas */
+@media (max-width:760px) {
+  .topics-tab-grid { grid-template-columns:1fr !important; }
+  .group-tabs { overflow-x:auto; }
+  .group-tabs button { font-size:13px; padding:8px 12px !important; }
+}
+

@@ -1,6 +1,8 @@
 """Aplicación FastAPI del backend del prototipo."""
 
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -13,35 +15,12 @@ from app.api.routes_groups import router as groups_router
 from app.core.config import get_settings
 from app.core.errors import PipelineError
 from app.db.database import Base, engine
-from app.models.group import Attempt, Group, GroupMembership, Topic  # noqa: F401 - registra modelos antes de create_all
+from app.models.group import Attempt, Group, GroupMembership, Topic  # noqa: F401
 from app.models.material import DidacticMaterial, MaterialVersion  # noqa: F401
-from app.models.user import User  # noqa: F401 - registra el modelo antes de create_all
-from app.models.video import Video  # noqa: F401 - registra el modelo antes de create_all
-
-app = FastAPI(title="YouTube Didactic Material API", version="0.1.0")
-app.include_router(router)
-app.include_router(auth_router)
-app.include_router(groups_router)
-WEB_DIRECTORY = Path(__file__).resolve().parent / "web"
-app.mount("/ui", StaticFiles(directory=WEB_DIRECTORY, html=True), name="ui")
+from app.models.user import User  # noqa: F401
+from app.models.video import Video  # noqa: F401
 
 
-@app.get("/", include_in_schema=False)
-def open_visual_interface() -> RedirectResponse:
-    """Redirige a la interfaz visual; el frontend decide si ir a auth o a videos."""
-    return RedirectResponse(url="/ui/auth/")
-
-
-@app.exception_handler(PipelineError)
-async def handle_pipeline_error(_request: Request, error: PipelineError) -> JSONResponse:
-    """Keep domain errors JSON-shaped even when raised outside a route try/except."""
-    return JSONResponse(
-        status_code=error.status_code,
-        content={"detail": {"code": error.code, "message": str(error)}},
-    )
-
-
-@app.on_event("startup")
 def initialise_local_metadata() -> None:
     """Crea tablas y añade campos de progreso en instalaciones SQLite ya existentes."""
     get_settings().ensure_data_directories()
@@ -65,7 +44,6 @@ def initialise_local_metadata() -> None:
         group_cols = {row[1] for row in connection.execute(text("PRAGMA table_info(groups)"))}
         if "code" not in group_cols:
             connection.execute(text("ALTER TABLE groups ADD COLUMN code VARCHAR(6) DEFAULT NULL"))
-            # Asignar un código alfanumérico único a cada grupo existente
             import secrets, string
             rows = connection.execute(text("SELECT id FROM groups WHERE code IS NULL")).fetchall()
             for r in rows:
@@ -79,7 +57,6 @@ def initialise_local_metadata() -> None:
         if "is_active" not in topic_cols:
             connection.execute(text("ALTER TABLE topics ADD COLUMN is_active BOOLEAN DEFAULT 1"))
 
-        # Migrar membresías existentes de group_members a group_memberships si aplica
         tables = {row[0] for row in connection.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
         if "group_members" in tables and "group_memberships" in tables:
             connection.execute(text("""
@@ -87,3 +64,32 @@ def initialise_local_metadata() -> None:
                 SELECT group_id, user_id, joined_at FROM group_members
             """))
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
+    """Gestor de ciclo de vida moderno de FastAPI (reemplaza eventos startup/shutdown deprecados)."""
+    initialise_local_metadata()
+    yield
+
+
+app = FastAPI(title="YouTube Didactic Material API", version="0.1.0", lifespan=lifespan)
+app.include_router(router)
+app.include_router(auth_router)
+app.include_router(groups_router)
+WEB_DIRECTORY = Path(__file__).resolve().parent / "web"
+app.mount("/ui", StaticFiles(directory=WEB_DIRECTORY, html=True), name="ui")
+
+
+@app.get("/", include_in_schema=False)
+def open_visual_interface() -> RedirectResponse:
+    """Redirige a la interfaz visual; el frontend index.html despacha a videos o a auth."""
+    return RedirectResponse(url="/ui/")
+
+
+@app.exception_handler(PipelineError)
+async def handle_pipeline_error(_request: Request, error: PipelineError) -> JSONResponse:
+    """Keep domain errors JSON-shaped even when raised outside a route try/except."""
+    return JSONResponse(
+        status_code=error.status_code,
+        content={"detail": {"code": error.code, "message": str(error)}},
+    )

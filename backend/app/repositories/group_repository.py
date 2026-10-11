@@ -216,3 +216,23 @@ class GroupRepository:
                 .order_by(Attempt.submitted_at.desc())
             )
         )
+
+    def get_attempt(self, session: Session, attempt_id: int) -> Attempt | None:
+        return session.get(Attempt, attempt_id)
+
+    def update_attempt_score(
+        self, session: Session, attempt: Attempt, final_score: float, review_notes: str | None = None
+    ) -> Attempt:
+        attempt.final_score = round(final_score, 2)
+        if review_notes is not None:
+            try:
+                data = json.loads(attempt.answers_json) if attempt.answers_json else {}
+                if isinstance(data, dict):
+                    data["review_notes"] = review_notes
+                    attempt.answers_json = json.dumps(data, ensure_ascii=False)
+            except Exception:
+                pass
+        session.commit()
+        session.refresh(attempt)
+        return attempt
+

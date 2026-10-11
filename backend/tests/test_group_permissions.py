@@ -437,4 +437,111 @@ def test_attempt_submission_with_open_answers(client: TestClient, monkeypatch: p
     assert att_data["attempt_number"] == 1
 
 
+def test_get_topic_materials_and_shared_vs_personal(client: TestClient) -> None:
+    """Verifica que los miembros vean materiales compartidos por el docente y personales propios."""
+    suffix = uuid.uuid4().hex[:6]
+    admin_id, admin_token = register_and_login(client, f"prof_{suffix}@test.com", "Profesor")
+    student_id, student_token = register_and_login(client, f"stud_{suffix}@test.com", "Estudiante")
+
+    # Grupo y tema
+    grp = client.post("/api/v1/groups", json={"name": "Física"}, headers=auth_header(admin_token)).json()
+    group_id = grp["id"]
+    client.post("/api/v1/groups/join", json={"code": grp["code"]}, headers=auth_header(student_token))
+
+    video_id, quiz_material_id = create_dummy_video_and_quiz(admin_id)
+
+    # Crear resumen del profesor
+    session_gen = get_session()
+    session = next(session_gen)
+    try:
+        summary_mat = DidacticMaterial(
+            video_id=video_id,
+            material_type="summary",
+            content_json=json.dumps({"synopsis": "Resumen oficial", "glossary": [], "didactic_blocks": [], "evidence_sufficient": True}),
+            owner_id=admin_id,
+        )
+        session.add(summary_mat)
+        session.commit()
+        summary_material_id = summary_mat.id
+    finally:
+        session.close()
+
+    # Publicar tema
+    top = client.post(
+        f"/api/v1/groups/{group_id}/topics",
+        json={"title": "Mecánica Cuántica", "video_id": video_id, "material_id": quiz_material_id},
+        headers=auth_header(admin_token),
+    ).json()
+    topic_id = top["id"]
+
+    # Consulta de materiales como estudiante
+    mats_res = client.get(
+        f"/api/v1/groups/{group_id}/topics/{topic_id}/materials",
+        headers=auth_header(student_token),
+    )
+    assert mats_res.status_code == 200
+    mats_data = mats_res.json()
+    assert mats_data["shared_quiz"] is not None
+    assert mats_data["shared_quiz"]["id"] == quiz_material_id
+    assert mats_data["shared_summary"] is not None
+    assert mats_data["shared_summary"]["id"] == summary_material_id
+    assert mats_data["personal_quiz"] is None
+
+
+def test_get_group_grades_and_manual_review(client: TestClient) -> None:
+    """Verifica que el libro de calificaciones distinga evaluados de pendientes y permita revisión manual."""
+    suffix = uuid.uuid4().hex[:6]
+    admin_id, admin_token = register_and_login(client, f"prof_{suffix}@test.com", "Profesor")
+    stud_id, stud_token = register_and_login(client, f"stud_{suffix}@test.com", "Estudiante")
+
+    grp = client.post("/api/v1/groups", json={"name": "Química"}, headers=auth_header(admin_token)).json()
+    group_id = grp["id"]
+    client.post("/api/v1/groups/join", json={"code": grp["code"]}, headers=auth_header(stud_token))
+
+    video_id, mat_id = create_dummy_video_and_quiz(admin_id)
+    top = client.post(
+        f"/api/v1/groups/{group_id}/topics",
+        json={"title": "Enlaces", "video_id": video_id, "material_id": mat_id},
+        headers=auth_header(admin_token),
+    ).json()
+    topic_id = top["id"]
+
+    # Antes de enviar intento -> Estado 'pending'
+    grades_pre = client.get(f"/api/v1/groups/{group_id}/grades", headers=auth_header(admin_token)).json()
+    stud_entry = next(m for m in grades_pre["members"] if m["user_id"] == stud_id)
+    assert stud_entry["completed_topics"] == 0
+    assert stud_entry["topics"][0]["status"] == "pending"
+
+    # Alumno envía intento con 100%
+    att_res = client.post(
+        f"/api/v1/groups/{group_id}/topics/{topic_id}/attempts",
+        json={"multiple_choice_answers": [{"question_index": 0, "selected_option": 2}, {"question_index": 1, "selected_option": 1}]},
+        headers=auth_header(stud_token),
+    )
+    assert att_res.status_code == 201
+    attempt_id = att_res.json()["id"]
+
+    # Después de enviar -> Estado 'evaluated', score = 100.0
+    grades_post = client.get(f"/api/v1/groups/{group_id}/grades", headers=auth_header(admin_token)).json()
+    stud_entry_post = next(m for m in grades_post["members"] if m["user_id"] == stud_id)
+    assert stud_entry_post["completed_topics"] == 1
+    assert stud_entry_post["topics"][0]["status"] == "evaluated"
+    assert stud_entry_post["topics"][0]["best_final_score"] == 100.0
+
+    # Revisión manual del admin (ajusta a 95.0 con nota)
+    patch_res = client.patch(
+        f"/api/v1/groups/{group_id}/topics/{topic_id}/attempts/{attempt_id}",
+        json={"final_score": 95.0, "review_notes": "Excelente razonamiento con ajuste menor."},
+        headers=auth_header(admin_token),
+    )
+    assert patch_res.status_code == 200
+    assert patch_res.json()["final_score"] == 95.0
+
+    # Confirmar que el libro de calificaciones refleja el cambio en base de datos
+    grades_rev = client.get(f"/api/v1/groups/{group_id}/grades", headers=auth_header(admin_token)).json()
+    stud_entry_rev = next(m for m in grades_rev["members"] if m["user_id"] == stud_id)
+    assert stud_entry_rev["topics"][0]["best_final_score"] == 95.0
+
+
+
 

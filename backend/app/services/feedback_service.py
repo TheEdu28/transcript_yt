@@ -50,7 +50,7 @@ class FeedbackService:
                 evidence_sufficient=True,
             )
         prompt = self._open_feedback_prompt(quiz, attempt)
-        evidence = self.vectors.retrieve(material.video_id, prompt)
+        evidence = self._retrieve_evidence_for_attempt(material.video_id, quiz, attempt)
         raw_response = GeminiService(self.settings).generate_json(
             prompt, evidence, response_schema=OpenFeedbackBatch,
         )
@@ -63,6 +63,70 @@ class FeedbackService:
             material_id=material_id, multiple_choice=multiple_choice, open_questions=batch.feedback,
             evidence_sufficient=batch.evidence_sufficient, insufficiency_note=batch.insufficiency_note,
         )
+
+    def _retrieve_evidence_for_attempt(
+        self,
+        video_id: int,
+        quiz: QuizResponse,
+        attempt: FeedbackRequest,
+    ) -> list[dict[str, Any]]:
+        """Recupera la evidencia asegurando que incluya los fragmentos de cada pregunta abierta."""
+        chunks_by_index: dict[int, dict[str, Any]] = {}
+        if hasattr(self.vectors, "collection") and self.vectors.collection is not None:
+            try:
+                all_video_data = self.vectors.collection.get(where={"video_id": video_id})
+                metadatas = all_video_data.get("metadatas") or []
+                documents = all_video_data.get("documents") or []
+                for doc, meta in zip(documents, metadatas):
+                    chunk_idx = meta.get("chunk_index")
+                    if chunk_idx is not None:
+                        chunks_by_index[chunk_idx] = {
+                            "chunk_index": chunk_idx,
+                            "text": doc,
+                            "start": meta.get("start"),
+                            "end": meta.get("end"),
+                        }
+            except Exception:
+                pass
+
+        selected_chunks: dict[int, dict[str, Any]] = {}
+
+        # 1. Incluir explícitamente los chunks que coinciden con los timestamps de las preguntas enviadas
+        for ans in attempt.open_answers:
+            if ans.question_index < len(quiz.open_questions):
+                ts = quiz.open_questions[ans.question_index].evidence_timestamp
+                matched = [
+                    c for c in chunks_by_index.values()
+                    if c.get("start") == ts or c.get("end") == ts or (
+                        c.get("start") and c.get("end") and c["start"] <= ts <= c["end"]
+                    )
+                ]
+                for c in matched:
+                    selected_chunks[c["chunk_index"]] = c
+
+        # 2. Búsqueda semántica por cada pregunta
+        for ans in attempt.open_answers:
+            if ans.question_index < len(quiz.open_questions):
+                q = quiz.open_questions[ans.question_index]
+                q_query = f"{q.question} {' '.join(q.expected_points)}"
+                try:
+                    sem_evidence = self.vectors.retrieve(video_id, q_query)
+                    for item in sem_evidence:
+                        idx = item.get("chunk_index")
+                        if idx is not None:
+                            if idx not in selected_chunks:
+                                selected_chunks[idx] = item
+                        else:
+                            selected_chunks[len(selected_chunks)] = item
+                except Exception:
+                    pass
+
+        # Si aún está vacío (o en tests unitarios simples), usar retrieve general
+        if not selected_chunks:
+            prompt = self._open_feedback_prompt(quiz, attempt)
+            return self.vectors.retrieve(video_id, prompt)
+
+        return [selected_chunks[k] for k in sorted(selected_chunks.keys())]
 
     @staticmethod
     def _validate_answer_indices(quiz: QuizResponse, attempt: FeedbackRequest) -> None:
@@ -129,7 +193,15 @@ RESPUESTAS A EVALUAR:
             if value is not None
         }
         for item in result.feedback:
-            if item.evidence_timestamp not in available_timestamps or item.evidence_timestamp != expected_timestamps[item.question_index]:
+            ts = item.evidence_timestamp
+            ts_matched = (
+                ts in available_timestamps
+                or any(
+                    e.get("start") and e.get("end") and str(e["start"]) <= ts <= str(e["end"])
+                    for e in evidence
+                )
+            )
+            if not ts_matched or ts != expected_timestamps[item.question_index]:
                 raise PipelineError(
                     "La retroalimentación cita un timestamp no fundamentado.",
                     code="UNGROUNDED_TIMESTAMP", status_code=502,

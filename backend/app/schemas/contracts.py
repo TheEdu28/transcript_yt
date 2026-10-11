@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Any, Literal
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
 
 Timestamp = Annotated[str, Field(pattern=r"^\d{2}:\d{2}:\d{2}$")]
 
@@ -220,7 +220,7 @@ class OpenAnswer(BaseModel):
     """Respuesta libre del estudiante con un límite seguro para la capa gratuita."""
 
     question_index: int = Field(ge=0)
-    answer: str = Field(min_length=1, max_length=3000)
+    answer: str = Field(default="", max_length=3000)
 
 
 class FeedbackRequest(BaseModel):
@@ -228,6 +228,14 @@ class FeedbackRequest(BaseModel):
 
     multiple_choice_answers: list[MultipleChoiceAnswer] = Field(default_factory=list)
     open_answers: list[OpenAnswer] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_answers(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "answers" in data and "multiple_choice_answers" not in data:
+                data["multiple_choice_answers"] = data["answers"]
+        return data
 
 
 class MultipleChoiceFeedback(BaseModel):
@@ -401,6 +409,9 @@ class TopicUpdate(BaseModel):
     """Datos para modificar un tema o actividad."""
 
     title: str | None = Field(default=None, min_length=2, max_length=200)
+    description: str | None = None
+    video_id: int | None = None
+    material_id: int | None = None
     is_active: bool | None = None
 
 
@@ -411,11 +422,31 @@ class TopicResponse(BaseModel):
     group_id: int
     video_id: int | None = None
     material_id: int | None = None
+    quiz_id: int | None = None
+    summary_id: int | None = None
     title: str
+    description: str = ""
     created_by: int | None = None
     is_active: bool = True
     created_at: datetime
 
+
+class TopicMaterialsResponse(BaseModel):
+    """Materiales compartidos del tema y materiales personales del estudiante."""
+
+    topic_id: int
+    video_id: int | None = None
+    shared_quiz: MaterialResponse | None = None
+    shared_summary: MaterialResponse | None = None
+    personal_quiz: MaterialResponse | None = None
+    personal_summary: MaterialResponse | None = None
+
+
+class AttemptGradeUpdate(BaseModel):
+    """Actualización o revisión manual de la calificación de un intento."""
+
+    final_score: float = Field(ge=0.0, le=100.0)
+    review_notes: str | None = None
 
 
 class AttemptSubmitRequest(BaseModel):
@@ -423,10 +454,21 @@ class AttemptSubmitRequest(BaseModel):
 
     multiple_choice_answers: list[MultipleChoiceAnswer] = Field(default_factory=list)
     open_answers: list[OpenAnswer] = Field(default_factory=list)
+    material_id: int | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_answers(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "answers" in data and "multiple_choice_answers" not in data:
+                data["multiple_choice_answers"] = data["answers"]
+        return data
 
 
 class AttemptResponse(BaseModel):
     """Detalle de un intento realizado por un miembro."""
+
+    model_config = ConfigDict(from_attributes=True)
 
     id: int
     topic_id: int
@@ -463,5 +505,41 @@ class TopicSummaryResponse(BaseModel):
     group_id: int
     title: str
     members_summary: list[MemberTopicSummary]
+
+
+class MemberTopicGrade(BaseModel):
+    """Estado y calificación de un miembro en un tema concreto."""
+
+    topic_id: int
+    topic_title: str
+    status: Literal["evaluated", "pending"]
+    total_attempts: int = 0
+    best_final_score: float | None = None
+    best_raw_score: float | None = None
+    latest_final_score: float | None = None
+    latest_attempt_id: int | None = None
+    latest_submitted_at: datetime | None = None
+
+
+class MemberGradeSummary(BaseModel):
+    """Resumen académico de un miembro en el grupo."""
+
+    user_id: int
+    user_name: str
+    user_email: str
+    completed_topics: int
+    total_topics: int
+    average_score: float | None = None
+    topics: list[MemberTopicGrade]
+
+
+class GroupGradesResponse(BaseModel):
+    """Libro de calificaciones consolidado del grupo."""
+
+    group_id: int
+    group_name: str
+    is_admin: bool
+    total_topics: int
+    members: list[MemberGradeSummary]
 
 

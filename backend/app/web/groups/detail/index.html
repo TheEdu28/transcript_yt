@@ -22,78 +22,152 @@
 
   <div id="notice" class="notice" role="status" style="display:none"></div>
 
-  <!-- Información del grupo y Código de invitación -->
-  <section class="panel" style="margin-bottom:18px">
-    <div class="group-header-info">
-      <div>
-        <p class="eyebrow" style="margin:0">CÓDIGO DE ACCESO AL GRUPO</p>
-        <p style="margin:4px 0 0;font-size:13px;color:var(--muted)">Comparte este código para que los miembros puedan unirse.</p>
-      </div>
-      <div class="group-code-badge-box">
-        <span id="group-code-tag" class="group-code-tag">------</span>
-        <button id="copy-code-btn" type="button" class="group-code-copy-btn secondary" title="Copiar código al portapapeles">📋 Copiar</button>
-        <button id="regen-code-btn" type="button" class="group-code-regen-btn secondary" style="display:none" title="Generar un nuevo código">🔄 Regenerar</button>
+  <!-- Menú de pestañas principales del grupo -->
+  <nav class="group-tabs" role="tablist" style="display:flex;gap:8px;margin-bottom:20px;border-bottom:2px solid var(--line);padding-bottom:0">
+    <button type="button" class="group-tab-btn active" data-tab="topics" style="border-radius:8px 8px 0 0;padding:10px 18px;background:none;border:none;color:var(--ink);font-weight:700;border-bottom:3px solid var(--blue);cursor:pointer">Temas</button>
+    <button type="button" class="group-tab-btn" data-tab="members" style="border-radius:8px 8px 0 0;padding:10px 18px;background:none;border:none;color:var(--muted);font-weight:700;border-bottom:3px solid transparent;cursor:pointer">Miembros</button>
+    <button type="button" class="group-tab-btn" data-tab="grades" style="border-radius:8px 8px 0 0;padding:10px 18px;background:none;border:none;color:var(--muted);font-weight:700;border-bottom:3px solid transparent;cursor:pointer">Calificaciones</button>
+  </nav>
+
+  <!-- PESTAÑA 1: TEMAS -->
+  <section id="tab-topics" class="tab-content">
+    <div class="topics-tab-grid" style="display:grid;grid-template-columns:260px 1fr;gap:20px;align-items:start">
+      
+      <!-- Izquierda: Código de clase compacto -->
+      <aside class="panel" style="padding:18px">
+        <div class="group-code-compact">
+          <p class="eyebrow" style="margin:0 0 6px">CÓDIGO DE CLASE</p>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:#f0f4ff;border:1px solid #c9d5fa;padding:8px 12px;border-radius:10px;margin-bottom:10px">
+            <span id="group-code-tag" style="font-family:monospace;font-size:18px;font-weight:800;letter-spacing:2px;color:var(--blue)">------</span>
+            <button id="copy-code-btn" type="button" class="secondary" style="padding:4px 8px;font-size:12px" title="Copiar al portapapeles">📋 Copiar</button>
+          </div>
+          <p style="margin:0 0 10px;font-size:12px;color:var(--muted);line-height:1.4">Comparte este código para que los miembros se unan al grupo.</p>
+          <button id="regen-code-btn" type="button" class="secondary" style="display:none;width:100%;font-size:12px;padding:6px 10px" title="Generar un nuevo código">🔄 Regenerar código</button>
+        </div>
+      </aside>
+
+      <!-- Centro y Derecha: Encabezado de temas y botón + Nuevo tema -->
+      <div style="display:grid;gap:16px">
+        <div class="panel accent-panel" style="padding:20px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+            <div>
+              <p class="eyebrow" style="margin:0">CONTENIDO ACADÉMICO</p>
+              <h2 style="margin:2px 0 0;font-size:20px">Temas y Actividades</h2>
+            </div>
+            <!-- Derecha: Botón Nuevo tema (admin) -->
+            <button id="toggle-new-topic-btn" type="button" style="display:none;font-size:13px;padding:8px 16px">
+              + Nuevo tema
+            </button>
+          </div>
+
+          <!-- Formulario desplegable para crear tema (solo admin) -->
+          <form id="topic-form" class="topic-create-form stack" style="display:none;padding:18px;border:1px solid #c9d5fa;border-radius:12px;background:#fff;margin-bottom:20px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <strong style="font-size:14px;color:var(--blue)">Crear nuevo tema</strong>
+              <button id="cancel-topic-btn" type="button" class="secondary" style="padding:3px 10px;font-size:12px">✕ Cancelar</button>
+            </div>
+
+            <label>Título del tema
+              <input id="topic-title" type="text" required placeholder="Ej: Fotosíntesis y Cloroplastos">
+            </label>
+            <label>Descripción (opcional)
+              <input id="topic-desc" type="text" placeholder="Breve orientación sobre el tema evaluado">
+            </label>
+
+            <!-- Selector visual de video -->
+            <div>
+              <label style="font-weight:700;font-size:13px;margin-bottom:6px;display:block">Video asociado:</label>
+              <input id="topic-video" type="hidden" value="">
+
+              <div id="selected-video-preview" style="display:none;margin-bottom:10px"></div>
+
+              <button type="button" id="toggle-video-picker-btn" class="secondary" style="font-size:13px;padding:6px 14px">
+                🎬 Seleccionar de mis videos procesados ▼
+              </button>
+
+              <div id="video-picker-container" class="video-picker-container" style="display:none;margin-top:10px">
+                <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Elige un video de tu historial para vincularlo a este tema:</p>
+                <div id="video-picker-grid" class="video-picker-grid">Cargando tus videos…</div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:8px">
+              <button id="topic-btn" type="submit" style="flex:1">Publicar tema en el grupo →</button>
+              <button id="cancel-topic-btn-2" type="button" class="secondary">Cancelar</button>
+            </div>
+          </form>
+
+          <!-- Centro: Lista de temas -->
+          <div id="topics-list" class="topics-list empty-state">Cargando temas…</div>
+        </div>
       </div>
     </div>
   </section>
 
-  <!-- Temas / Actividades -->
-  <section class="panel accent-panel">
-    <div class="panel-heading"><p class="number">01</p><h2>Temas y Actividades</h2></div>
-
-    <!-- Formulario para agregar tema (solo admin) -->
-    <form id="topic-form" class="topic-create-form stack" style="max-width:650px;display:none;margin-bottom:20px">
-      <label>Título del tema
-        <input id="topic-title" type="text" required placeholder="Ej: Fotosíntesis y Cloroplastos">
-      </label>
-      <label>Descripción (opcional)
-        <input id="topic-desc" type="text" placeholder="Breve orientación sobre el tema evaluado">
-      </label>
-
-      <!-- Selector visual de video -->
-      <div>
-        <label style="font-weight:700;font-size:13px;margin-bottom:6px;display:block">Video asociado:</label>
-        <input id="topic-video" type="hidden" value="">
-
-        <!-- Previsualización del video seleccionado -->
-        <div id="selected-video-preview" style="display:none;margin-bottom:10px"></div>
-
-        <!-- Botón para alternar el catálogo de videos -->
-        <button type="button" id="toggle-video-picker-btn" class="secondary" style="font-size:13px;padding:6px 14px">
-          🎬 Seleccionar de mis videos procesados ▼
-        </button>
-
-        <!-- Contenedor desplegable de selección -->
-        <div id="video-picker-container" class="video-picker-container" style="display:none;margin-top:10px">
-          <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Elige un video de tu historial para vincularlo a este tema:</p>
-          <div id="video-picker-grid" class="video-picker-grid">Cargando tus videos…</div>
+  <!-- PESTAÑA 2: MIEMBROS -->
+  <section id="tab-members" class="tab-content" style="display:none">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:18px">
+        <div>
+          <p class="eyebrow" style="margin:0">COMUNIDAD DEL GRUPO</p>
+          <h2 style="margin:2px 0 0;font-size:20px">Miembros inscritos</h2>
+        </div>
+        <div id="admin-member-box" style="display:none">
+          <form id="member-form" style="display:flex;gap:8px;align-items:center">
+            <input id="member-uid" type="number" min="1" placeholder="ID de usuario (ej: 4)" style="width:170px;padding:7px 10px;font-size:13px">
+            <button id="member-btn" type="submit" class="secondary" style="padding:7px 12px;font-size:13px">Agregar miembro</button>
+          </form>
         </div>
       </div>
 
-      <button id="topic-btn" type="submit" style="margin-top:8px">Publicar tema en el grupo →</button>
-    </form>
-
-    <div id="topics-list" class="topics-list empty-state">Cargando temas…</div>
+      <div id="members-table-container">
+        <div id="members-list" class="empty-state">Cargando miembros…</div>
+      </div>
+    </div>
   </section>
 
-  <!-- Miembros del grupo -->
-  <section class="panel" id="members-section" style="margin-top:18px">
-    <div class="panel-heading"><p class="number">02</p><h2>Miembros del grupo</h2></div>
+  <!-- PESTAÑA 3: CALIFICACIONES -->
+  <section id="tab-grades" class="tab-content" style="display:none">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+        <div>
+          <p class="eyebrow" style="margin:0">EVALUACIONES Y RENDIMIENTO</p>
+          <h2 style="margin:2px 0 0;font-size:20px">Libro de Calificaciones</h2>
+        </div>
+        <button id="refresh-grades-btn" type="button" class="secondary" style="font-size:12px;padding:6px 12px">🔄 Actualizar notas</button>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 18px">
+        Las evaluaciones se corrigen automáticamente mediante evidencia RAG extraída del video. Los administradores pueden revisar las respuestas y ajustar la calificación final de cada intento.
+      </p>
 
-    <!-- Formulario para agregar miembro (solo admin) -->
-    <div id="admin-member-box" style="display:none;margin-bottom:18px">
-      <form id="member-form" class="actions" style="max-width:440px;display:flex;gap:10px;align-items:flex-end">
-        <label style="flex:1">Añadir usuario por ID
-          <input id="member-uid" type="number" min="1" placeholder="Ej: 4">
+      <div id="grades-container">
+        <div class="empty-state">Cargando calificaciones…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Modal de Revisión Manual de Calificación -->
+  <div id="grade-review-modal" class="modal-backdrop" style="display:none">
+    <div class="modal" style="max-width:540px">
+      <h3>Revisión de Calificación</h3>
+      <p id="grade-modal-subtitle" style="font-size:13px;color:var(--muted);margin:4px 0 16px"></p>
+      
+      <div id="grade-modal-attempt-info" style="background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:16px;font-size:13px"></div>
+
+      <form id="grade-modal-form" class="stack">
+        <label>Nota final asignada (0 - 100)
+          <input id="grade-modal-score" type="number" min="0" max="100" step="0.5" required>
         </label>
-        <button id="member-btn" type="submit" class="secondary">Agregar miembro</button>
+        <label>Comentarios u observaciones de la revisión (opcional)
+          <textarea id="grade-modal-notes" rows="3" placeholder="Ej: Respuesta abierta enriquecida con análisis adecuado..."></textarea>
+        </label>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
+          <button type="button" id="grade-modal-cancel" class="secondary">Cancelar</button>
+          <button type="submit" id="grade-modal-submit">Guardar calificación</button>
+        </div>
       </form>
     </div>
-
-    <div id="members-table-container">
-      <div id="members-list" class="empty-state">Cargando miembros…</div>
-    </div>
-  </section>
+  </div>
 </main>
 
 <script type="module" src="/ui/groups/detail/page.js"></script>

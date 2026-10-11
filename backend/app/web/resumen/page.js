@@ -1,4 +1,4 @@
-import { apiGetVideo, apiListMyMaterials, apiListMyVideos, auth, fetchModels, request } from "/ui/api.js";
+import { apiGetTopicMaterials, apiGetVideo, apiListMyMaterials, apiListMyVideos, auth, fetchModels, request } from "/ui/api.js";
 import {
   escapeHtml,
   getPositiveIntParam,
@@ -17,6 +17,8 @@ renderUserBar();
 
 let videoId = getPositiveIntParam("video");
 let materialId = getPositiveIntParam("material");
+let groupId = getPositiveIntParam("group");
+let topicId = getPositiveIntParam("topic");
 
 const modelSelector = initModelSelector("model-selector-container", fetchModels);
 
@@ -300,6 +302,54 @@ function setupExportHandlers() {
 
 async function init() {
   setupExportHandlers();
+
+  // Si venimos desde un tema de grupo, cargar el resumen compartido del tema
+  if (groupId && topicId) {
+    try {
+      const topicMats = await apiGetTopicMaterials(groupId, topicId);
+      if (topicMats?.video_id && !videoId) videoId = topicMats.video_id;
+
+      // Actualizar enlace para volver al grupo
+      const navSteps = document.querySelector(".steps");
+      if (navSteps && !document.getElementById("back-to-group-link")) {
+        const backLink = document.createElement("a");
+        backLink.id = "back-to-group-link";
+        backLink.href = `/ui/groups/detail/?group=${groupId}`;
+        backLink.style.color = "var(--blue)";
+        backLink.style.fontWeight = "700";
+        backLink.innerHTML = "← Volver al Grupo";
+        navSteps.prepend(backLink);
+        const sep = document.createElement("i");
+        navSteps.insertBefore(sep, navSteps.children[1]);
+      }
+
+      if (topicMats?.summary) {
+        activeMaterialId = topicMats.summary.id;
+        materialId = topicMats.summary.id;
+        renderSummary(topicMats.summary.content);
+        updateExportVisibility(topicMats.summary.id);
+
+        const banner = document.createElement("div");
+        banner.className = "notice";
+        banner.style.borderLeft = "4px solid var(--blue)";
+        banner.style.marginBottom = "14px";
+        banner.innerHTML = `<strong>Resumen didáctico oficial del tema:</strong> ${escapeHtml(topicMats.title)} · <em>Material publicado por el docente para el grupo.</em>`;
+        byId("summary-output")?.parentNode.insertBefore(banner, byId("summary-output"));
+
+        if (topicMats.video_id) {
+          videoId = topicMats.video_id;
+          byId("video-label").textContent = `Video ID: ${videoId}`;
+          byId("quiz-link").href = urlFor("/ui/quiz/", { video: videoId, group: groupId, topic: topicId });
+          byId("material-link").href = urlFor("/ui/material/", { video: videoId, material: materialId });
+          loadVideoPlayer(videoId);
+        }
+        showNotice(`Resumen del tema «${topicMats.title}» cargado.`, "info");
+        return;
+      }
+    } catch (err) {
+      console.warn("No se pudo obtener el material del tema del grupo:", err);
+    }
+  }
 
   // Si no hay video en la URL, pero sí material, obtenemos el video del material
   if (!videoId && materialId) {

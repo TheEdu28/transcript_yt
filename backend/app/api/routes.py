@@ -18,7 +18,7 @@ from app.schemas.contracts import (
     MaterialResponse, MaterialUpdateRequest, MaterialVersionsResponse, ModelsResponse, ProgressResponse,
     QuizRequest, QuizResponse, SummaryRequest, SummaryResponse, VideoDetailResponse, VideoHistoryResponse,
 )
-from app.services.auth_service import get_current_user
+from app.services.auth_service import get_current_user, get_optional_current_user
 from app.services.export_service import ExportService
 from app.services.feedback_service import FeedbackService
 from app.services.material_service import MaterialService
@@ -142,10 +142,21 @@ def get_ingestion_progress(video_id: int, session: Session = Depends(get_session
                503: {"description": "Gemini no disponible temporalmente"},
                502: {"description": "Respuesta Gemini inválida o no fundamentada"}},
 )
-def generate_summary(payload: SummaryRequest, session: Session = Depends(get_session)) -> SummaryResponse:
+def generate_summary(
+    payload: SummaryRequest,
+    current_user: User | None = Depends(get_optional_current_user),
+    session: Session = Depends(get_session),
+) -> SummaryResponse:
     """RF-02: recupera contexto local y solicita la salida didáctica grounded a Gemini."""
     try:
-        return PipelineService().summary(payload.video_id, payload.focus, session, model_provider=payload.model_provider, model_id=payload.model_id)
+        return PipelineService().summary(
+            payload.video_id,
+            payload.focus,
+            session,
+            model_provider=payload.model_provider,
+            model_id=payload.model_id,
+            owner_id=current_user.id if current_user else None,
+        )
     except PipelineError as error:
         raise_http(error)
 
@@ -156,12 +167,22 @@ def generate_summary(payload: SummaryRequest, session: Session = Depends(get_ses
                503: {"description": "Gemini no disponible temporalmente"},
                502: {"description": "Respuesta Gemini inválida o no fundamentada"}},
 )
-def generate_quiz(payload: QuizRequest, session: Session = Depends(get_session)) -> QuizResponse:
+def generate_quiz(
+    payload: QuizRequest,
+    current_user: User | None = Depends(get_optional_current_user),
+    session: Session = Depends(get_session),
+) -> QuizResponse:
     """RF-03: crea preguntas respaldadas por timestamps de la transcripción."""
     try:
         return PipelineService().quiz(
-            payload.video_id, payload.multiple_choice_count, payload.open_question_count,
-            payload.bloom_levels, session, model_provider=payload.model_provider, model_id=payload.model_id,
+            payload.video_id,
+            payload.multiple_choice_count,
+            payload.open_question_count,
+            payload.bloom_levels,
+            session,
+            model_provider=payload.model_provider,
+            model_id=payload.model_id,
+            owner_id=current_user.id if current_user else None,
         )
     except PipelineError as error:
         raise_http(error)
@@ -169,15 +190,35 @@ def generate_quiz(payload: QuizRequest, session: Session = Depends(get_session))
 
 @router.get("/materials", response_model=list[MaterialResponse])
 def list_my_materials(
+    video_id: int | None = Query(default=None),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[MaterialResponse]:
-    """Lista todos los materiales didácticos generados (resúmenes y cuestionarios)."""
-    materials = session.scalars(
-        select(DidacticMaterial)
-        .where((DidacticMaterial.owner_id == current_user.id) | (DidacticMaterial.owner_id.is_(None)))
-        .order_by(DidacticMaterial.id.desc())
-    ).all()
+    """Lista materiales del usuario y materiales compartidos en grupos donde participa."""
+    query = select(DidacticMaterial)
+    if video_id is not None:
+        from app.models.group import Group, GroupMembership
+        group_ids_subq = (
+            select(Group.id).where(Group.admin_id == current_user.id)
+            .union(select(GroupMembership.group_id).where(GroupMembership.user_id == current_user.id))
+        )
+        shared_topic_video_subq = select(Topic.video_id).where(
+            Topic.group_id.in_(group_ids_subq), Topic.video_id == video_id
+        )
+        query = query.where(
+            DidacticMaterial.video_id == video_id,
+            (
+                (DidacticMaterial.owner_id == current_user.id)
+                | (DidacticMaterial.owner_id.is_(None))
+                | (DidacticMaterial.video_id.in_(shared_topic_video_subq))
+            ),
+        )
+    else:
+        query = query.where(
+            (DidacticMaterial.owner_id == current_user.id) | (DidacticMaterial.owner_id.is_(None))
+        )
+
+    materials = session.scalars(query.order_by(DidacticMaterial.id.desc())).all()
     svc = MaterialService()
     return [
         svc._as_response(session, m.id, m.video_id, m.material_type, m.content_json)

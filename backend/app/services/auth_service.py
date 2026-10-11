@@ -101,3 +101,27 @@ def get_current_user(
     if not user:
         raise credentials_error
     return user
+
+
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+
+def get_optional_current_user(
+    token: str | None = Depends(oauth2_scheme_optional),
+    session: Session = Depends(get_session),
+) -> User | None:
+    """Retorna el usuario actual si hay token Bearer válido, o None si no lo hay."""
+    if not token:
+        return None
+    settings = get_settings()
+    if not settings.jwt_secret_key:
+        return None
+    try:
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        subject = payload.get("sub")
+        if not subject:
+            return None
+        return UserRepository().get(session, int(subject))
+    except (JWTError, ValueError):
+        return None
+
