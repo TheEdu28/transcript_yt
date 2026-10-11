@@ -39,10 +39,17 @@ export async function apiMe() { return request("/auth/me"); }
 export async function apiCreateGroup(name) {
   return request("/groups", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
 }
+export async function apiJoinGroup(code) {
+  return request("/groups/join", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+}
 export async function apiListGroups() { return request("/groups"); }
+export async function apiGetMyGroups() { return request("/groups/mine"); }
 export async function apiGetGroup(id) { return request(`/groups/${id}`); }
 export async function apiUpdateGroup(id, name) {
   return request(`/groups/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+}
+export async function apiListGroupMembers(groupId) {
+  return request(`/groups/${groupId}/members`);
 }
 export async function apiAddMember(groupId, userId) {
   return request(`/groups/${groupId}/members`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user_id: userId }) });
@@ -50,10 +57,23 @@ export async function apiAddMember(groupId, userId) {
 export async function apiRemoveMember(groupId, userId) {
   return request(`/groups/${groupId}/members/${userId}`, { method: "DELETE" });
 }
+export async function apiRegenerateGroupCode(groupId) {
+  return request(`/groups/${groupId}/regenerate-code`, { method: "POST" });
+}
 
 // --- Topics ---
-export async function apiCreateTopic(groupId, title, description, videoId) {
-  return request(`/groups/${groupId}/topics`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, description: description || "", is_published: true, video_id: videoId || null }) });
+export async function apiCreateTopic(groupId, title, description, videoId, materialId = null) {
+  return request(`/groups/${groupId}/topics`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title,
+      description: description || "",
+      is_active: true,
+      video_id: videoId || null,
+      material_id: materialId || null,
+    }),
+  });
 }
 export async function apiListTopics(groupId) { return request(`/groups/${groupId}/topics`); }
 export async function apiUpdateTopic(groupId, topicId, fields) {
@@ -68,9 +88,20 @@ export async function apiListMyVideos(page = 1, pageSize = 20, status = null) {
   const params = `page=${page}&page_size=${pageSize}${status ? `&status=${status}` : ""}`;
   return request(`/videos?${params}`);
 }
+export async function apiGetVideo(videoId) {
+  return request(`/videos/${videoId}`);
+}
 export async function apiDeleteVideo(videoId) {
   return request(`/videos/${videoId}`, { method: "DELETE" });
 }
 export async function apiPublishVideoAsTopic(groupId, videoId, title, description) {
   return request(`/groups/${groupId}/topics`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title, description: description || "", is_published: true, video_id: videoId }) });
+}
+
+// --- Materials ---
+export async function apiListMyMaterials() {
+  return request("/materials");
+}
+export async function apiGetMaterial(materialId) {
+  return request(`/materials/${materialId}`);
 }

@@ -1,7 +1,11 @@
 """Configuración centralizada. Ninguna clave se codifica en el repositorio."""
 
+import os
 from functools import lru_cache
 from pathlib import Path
+
+# Desactivar telemetría anónima de ChromaDB a nivel global
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -41,6 +45,11 @@ class Settings(BaseSettings):
     yt_dlp_cookie_file: Path | None = Field(
         default=None,
         validation_alias=AliasChoices("YTDLP_COOKIE_FILE", "yt_dlp_cookie_file"),
+    )
+    penalty_per_attempt: float = Field(
+        default=10.0,
+        validation_alias=AliasChoices("PENALTY_PER_ATTEMPT", "penalty_per_attempt"),
+        description="Puntos que se descuentan por cada reintento a partir del segundo.",
     )
     sqlite_database_url: str = f"sqlite:///{(DATA_DIR / 'metadata' / 'app.db').as_posix()}"
     chroma_persist_directory: Path = DATA_DIR / "chroma_db"

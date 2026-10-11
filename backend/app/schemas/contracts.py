@@ -56,6 +56,19 @@ class IngestResponse(BaseModel):
     processing_seconds: float
 
 
+class VideoDetailResponse(BaseModel):
+    """Detalle de un video registrado incluyendo su youtube_id."""
+
+    id: int
+    youtube_id: str
+    source_url: str
+    title: str
+    language: str
+    duration_seconds: int
+    status: str
+
+
+
 class IngestAcceptedResponse(BaseModel):
     """Trabajo de ingesta que puede consultarse mientras se ejecuta en segundo plano."""
 
@@ -233,10 +246,28 @@ class OpenAnswerFeedback(BaseModel):
 
 
 class OpenFeedbackBatch(BaseModel):
-    """Contrato JSON que Gemini debe devolver para las respuestas abiertas."""
+    """Contrato JSON que Gemini debe devolver para las respuestas abiertas de HU-09."""
 
     feedback: list[OpenAnswerFeedback]
     evidence_sufficient: bool
+    insufficiency_note: str | None = None
+
+
+class OpenQuestionEvaluation(BaseModel):
+    """Evaluación individual de una pregunta abierta con calificación normalizada y groundedness."""
+
+    question_index: int = Field(..., ge=0, description="Índice de la pregunta abierta en el cuestionario.")
+    score: float = Field(..., ge=0.0, le=1.0, description="Calificación continua entre 0.0 y 1.0 basada en la evidencia.")
+    is_correct: bool = Field(..., description="True si la respuesta alcanza suficiencia pedagógica (score >= 0.7).")
+    feedback_text: str = Field(..., description="Explicación pedagógica breve fundamentada exclusivamente en la evidencia.")
+    missing_points: list[str] = Field(default_factory=list, description="Ideas clave que faltaron según la evidencia.")
+
+
+class OpenQuestionsEvaluationBatch(BaseModel):
+    """Contrato JSON que Gemini debe devolver para la evaluación estructurada de preguntas abiertas."""
+
+    evaluations: list[OpenQuestionEvaluation]
+    evidence_sufficient: bool = Field(default=True, description="False si la evidencia no basta para evaluar.")
     insufficiency_note: str | None = None
 
 
@@ -301,6 +332,12 @@ class GroupCreate(BaseModel):
     name: str = Field(min_length=2, max_length=150)
 
 
+class GroupJoinRequest(BaseModel):
+    """Código de 6 caracteres alfanuméricos para unirse a un grupo."""
+
+    code: str = Field(min_length=6, max_length=6, pattern=r"^[A-Za-z0-9]{6}$")
+
+
 class GroupUpdate(BaseModel):
     """Datos para modificar las propiedades del grupo."""
 
@@ -308,12 +345,20 @@ class GroupUpdate(BaseModel):
 
 
 class GroupResponse(BaseModel):
-    """Representación pública del grupo con su admin_id."""
+    """Representación pública del grupo con su admin_id y código."""
 
     id: int
     name: str
     admin_id: int
+    code: str
     created_at: datetime
+
+
+class MyGroupsResponse(BaseModel):
+    """Listas separadas de grupos administrados y grupos en los que es miembro."""
+
+    admin_groups: list[GroupResponse]
+    member_groups: list[GroupResponse]
 
 
 class GroupMemberAdd(BaseModel):
@@ -331,22 +376,32 @@ class GroupMemberResponse(BaseModel):
     joined_at: datetime
 
 
+class GroupMemberDetail(BaseModel):
+    """Información legible del miembro para la interfaz del grupo."""
+
+    id: int
+    user_id: int
+    nombre: str
+    email: str
+    is_admin: bool
+    joined_at: datetime
+
+
 class TopicCreate(BaseModel):
     """Datos para registrar un nuevo tema o actividad en el grupo."""
 
     title: str = Field(min_length=2, max_length=200)
-    description: str = Field(default="", max_length=5000)
-    is_published: bool = True
     video_id: int | None = None
+    material_id: int | None = None
+    description: str | None = None
+    is_active: bool = True
 
 
 class TopicUpdate(BaseModel):
     """Datos para modificar un tema o actividad."""
 
     title: str | None = Field(default=None, min_length=2, max_length=200)
-    description: str | None = Field(default=None, max_length=5000)
-    is_published: bool | None = None
-    video_id: int | None = None
+    is_active: bool | None = None
 
 
 class TopicResponse(BaseModel):
@@ -354,26 +409,59 @@ class TopicResponse(BaseModel):
 
     id: int
     group_id: int
-    title: str
-    description: str
-    is_published: bool
     video_id: int | None = None
+    material_id: int | None = None
+    title: str
+    created_by: int | None = None
+    is_active: bool = True
     created_at: datetime
 
 
-class AttemptCreate(BaseModel):
-    """Envío de resultado o intento de un alumno."""
 
-    score: int | None = Field(default=None, ge=0, le=100)
-    details: str = Field(default="", max_length=2000)
+class AttemptSubmitRequest(BaseModel):
+    """Envío de respuestas de un cuestionario por parte de un miembro."""
+
+    multiple_choice_answers: list[MultipleChoiceAnswer] = Field(default_factory=list)
+    open_answers: list[OpenAnswer] = Field(default_factory=list)
 
 
 class AttemptResponse(BaseModel):
-    """Detalle del intento realizado."""
+    """Detalle de un intento realizado por un miembro."""
 
     id: int
     topic_id: int
     user_id: int
-    score: int | None
-    details: str
-    created_at: datetime
+    attempt_number: int
+    raw_score: float
+    final_score: float
+    submitted_at: datetime
+
+
+class AdminAttemptResponse(AttemptResponse):
+    """Detalle del intento para el administrador incluyendo las respuestas dadas."""
+
+    answers_json: str
+
+
+class MemberTopicSummary(BaseModel):
+    """Resumen de desempeño de un miembro en una actividad."""
+
+    user_id: int
+    user_name: str
+    user_email: str
+    total_attempts: int
+    best_attempt: AttemptResponse | None
+    latest_attempt: AttemptResponse | None
+    average_final_score: float | None
+    average_raw_score: float | None
+
+
+class TopicSummaryResponse(BaseModel):
+    """Resumen consolidado de todos los miembros del grupo para un tema."""
+
+    topic_id: int
+    group_id: int
+    title: str
+    members_summary: list[MemberTopicSummary]
+
+

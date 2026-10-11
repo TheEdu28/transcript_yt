@@ -1,28 +1,45 @@
-"""Endpoints para administración de grupos, temas y control de accesos."""
+from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+import json
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies_auth import require_group_admin, require_group_member
+from app.core.config import get_settings
 from app.db.database import get_session
-from app.models.group import ActivityAttempt, Group, GroupMember, Topic
+from app.models.group import Attempt, Group, GroupMembership, Topic
+from app.models.material import DidacticMaterial
 from app.models.user import User
+from app.models.video import Video
+from app.repositories.group_repository import GroupRepository
 from app.schemas.contracts import (
-    AttemptCreate,
+    AdminAttemptResponse,
     AttemptResponse,
+    AttemptSubmitRequest,
     GroupCreate,
+    GroupJoinRequest,
     GroupMemberAdd,
+    GroupMemberDetail,
     GroupMemberResponse,
     GroupResponse,
-    GroupUpdate,
+    MyGroupsResponse,
     TopicCreate,
     TopicResponse,
+    TopicSummaryResponse,
     TopicUpdate,
 )
 from app.services.auth_service import get_current_user
+from app.services.grading_service import (
+    QuizAttemptGradingService,
+    compute_final_score,
+    compute_member_topic_summary,
+    evaluate_quiz_answers,
+)
 
 router = APIRouter(prefix="/api/v1/groups", tags=["groups"])
+repo = GroupRepository()
 
 
 @router.post("", response_model=GroupResponse, status_code=status.HTTP_201_CREATED)
@@ -31,35 +48,53 @@ def create_group(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> Group:
-    """Crea un grupo registrando al usuario autenticado como su admin_id."""
-    group = Group(name=payload.name.strip(), admin_id=current_user.id)
-    session.add(group)
-    session.flush()
-
-    # Añadir al creador como miembro del grupo automáticamente
-    membership = GroupMember(group_id=group.id, user_id=current_user.id)
-    session.add(membership)
+    """Crea un grupo registrando al usuario autenticado como admin y primer miembro."""
+    group = repo.create_group(session, name=payload.name.strip(), admin_id=current_user.id)
     session.commit()
     session.refresh(group)
     return group
 
 
+@router.post("/join", response_model=GroupResponse)
+def join_group(
+    payload: GroupJoinRequest,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Group:
+    """Permite al usuario autenticado unirse a un grupo mediante su código alfanumérico de 6 caracteres."""
+    group = repo.get_group_by_code(session, payload.code.strip())
+    if not group:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "GROUP_NOT_FOUND", "message": "Código de grupo inválido o inexistente."},
+        )
+
+    membership = repo.get_membership(session, group.id, current_user.id)
+    if not membership:
+        repo.add_member(session, group.id, current_user.id)
+        session.commit()
+
+    return group
+
+
 @router.get("", response_model=list[GroupResponse])
-def list_my_groups(
+def list_groups(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> list[Group]:
-    """Lista todos los grupos donde el usuario autenticado es admin o miembro."""
-    member_group_ids = select(GroupMember.group_id).where(GroupMember.user_id == current_user.id)
-    groups = (
-        session.query(Group)
-        .filter(
-            (Group.admin_id == current_user.id) | (Group.id.in_(member_group_ids))
-        )
-        .order_by(Group.created_at.desc())
-        .all()
-    )
-    return groups
+    """Lista todos los grupos donde el usuario es admin o miembro (compatibilidad frontend)."""
+    admin_groups, member_groups = repo.get_user_groups(session, current_user.id)
+    return admin_groups + member_groups
+
+
+@router.get("/mine", response_model=MyGroupsResponse)
+def get_my_groups(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, list[Group]]:
+    """Devuelve los grupos donde el usuario es admin y donde es miembro (dos listas separadas)."""
+    admin_groups, member_groups = repo.get_user_groups(session, current_user.id)
+    return {"admin_groups": admin_groups, "member_groups": member_groups}
 
 
 @router.get("/{group_id}", response_model=GroupResponse)
@@ -70,94 +105,124 @@ def get_group(
     return group
 
 
-@router.patch("/{group_id}", response_model=GroupResponse)
-def update_group(
-    payload: GroupUpdate,
+@router.post("/{group_id}/regenerate-code", response_model=GroupResponse)
+def regenerate_group_code(
     group: Group = Depends(require_group_admin),
     session: Session = Depends(get_session),
 ) -> Group:
-    """Edita el nombre del grupo. Solo permitido para el admin del grupo."""
-    group.name = payload.name.strip()
+    """SOLO admin: regenera el código alfanumérico único de invitación al grupo."""
+    updated = repo.regenerate_code(session, group.id)
+    if not updated:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grupo no encontrado")
     session.commit()
-    session.refresh(group)
-    return group
+    session.refresh(updated)
+    return updated
+
+
+@router.get("/{group_id}/members", response_model=list[GroupMemberDetail])
+def list_group_members(
+    group: Group = Depends(require_group_member),
+    session: Session = Depends(get_session),
+) -> list[dict[str, Any]]:
+    """Cualquier miembro puede ver los integrantes actuales del grupo."""
+    return repo.get_group_members_detail(session, group.id)
 
 
 @router.post("/{group_id}/members", response_model=GroupMemberResponse, status_code=status.HTTP_201_CREATED)
-def add_member(
+def add_group_member(
     payload: GroupMemberAdd,
     group: Group = Depends(require_group_admin),
     session: Session = Depends(get_session),
-) -> GroupMember:
-    """Agrega un usuario como miembro del grupo. Solo el admin puede añadir miembros."""
-    target_user = session.get(User, payload.user_id)
-    if not target_user:
+) -> GroupMembership:
+    """SOLO admin: añade un usuario al grupo directamente por su ID."""
+    user = session.get(User, payload.user_id)
+    if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "USER_NOT_FOUND", "message": "El usuario a incorporar no existe."},
+            detail={"code": "USER_NOT_FOUND", "message": f"Usuario con ID {payload.user_id} no encontrado."},
         )
-
-    existing = (
-        session.query(GroupMember)
-        .filter(GroupMember.group_id == group.id, GroupMember.user_id == payload.user_id)
-        .first()
-    )
+    existing = repo.get_membership(session, group.id, user.id)
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={"code": "MEMBER_ALREADY_EXISTS", "message": "El usuario ya es miembro de este grupo."},
-        )
-
-    member = GroupMember(group_id=group.id, user_id=payload.user_id)
-    session.add(member)
+        return existing
+    membership = repo.add_member(session, group.id, user.id)
     session.commit()
-    session.refresh(member)
-    return member
+    session.refresh(membership)
+    return membership
 
 
-@router.delete("/{group_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def remove_member(
+@router.delete("/{group_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
+def remove_group_member(
     user_id: int,
     group: Group = Depends(require_group_admin),
     session: Session = Depends(get_session),
-) -> None:
-    """Remueve a un miembro del grupo. Solo permitido para el admin."""
+) -> Response:
+    """SOLO admin: expulsa a un miembro del grupo (el admin no puede eliminarse a sí mismo)."""
     if user_id == group.admin_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "CANNOT_REMOVE_ADMIN", "message": "No se puede remover al administrador del grupo."},
+            detail={"code": "CANNOT_REMOVE_ADMIN", "message": "El administrador no puede ser eliminado del grupo."},
         )
-
-    membership = (
-        session.query(GroupMember)
-        .filter(GroupMember.group_id == group.id, GroupMember.user_id == user_id)
-        .first()
-    )
-    if not membership:
+    removed = repo.remove_member(session, group.id, user_id)
+    if not removed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "MEMBER_NOT_FOUND", "message": "El miembro no fue encontrado en este grupo."},
+            detail={"code": "MEMBERSHIP_NOT_FOUND", "message": "El usuario no es miembro del grupo."},
         )
-
-    session.delete(membership)
     session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/{group_id}/topics", response_model=TopicResponse, status_code=status.HTTP_201_CREATED)
 def create_topic(
     payload: TopicCreate,
     group: Group = Depends(require_group_admin),
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> Topic:
-    """Crea una nueva actividad o tema. Solo permitido para el admin del grupo."""
-    topic = Topic(
+    """SOLO admin: crea un nuevo tema/actividad asociando video y material tipo 'quiz' existentes."""
+    video = None
+    material = None
+
+    if payload.video_id is not None:
+        video = session.get(Video, payload.video_id)
+        if not video:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={"code": "VIDEO_NOT_FOUND", "message": "El video especificado no existe."},
+            )
+
+        if payload.material_id is not None:
+            material = session.get(DidacticMaterial, payload.material_id)
+            if not material or material.video_id != video.id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail={"code": "MATERIAL_NOT_FOUND", "message": "El material no existe o no corresponde a este video."},
+                )
+            if material.material_type != "quiz":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={"code": "INVALID_MATERIAL_TYPE", "message": "El material asociado debe ser de tipo 'quiz'."},
+                )
+        else:
+            # Buscar automáticamente si hay un quiz ya generado para este video
+            material = (
+                session.query(DidacticMaterial)
+                .filter(DidacticMaterial.video_id == video.id, DidacticMaterial.material_type == "quiz")
+                .order_by(DidacticMaterial.id.desc())
+                .first()
+            )
+
+    topic = repo.create_topic(
+        session,
         group_id=group.id,
-        title=payload.title.strip(),
-        description=payload.description.strip(),
-        is_published=payload.is_published,
         video_id=payload.video_id,
+        material_id=material.id if material else payload.material_id,
+        title=payload.title.strip(),
+        description=payload.description or "",
+        created_by=current_user.id,
+        is_active=payload.is_active,
+        is_published=payload.is_active,
     )
-    session.add(topic)
     session.commit()
     session.refresh(topic)
     return topic
@@ -168,14 +233,8 @@ def list_topics(
     group: Group = Depends(require_group_member),
     session: Session = Depends(get_session),
 ) -> list[Topic]:
-    """Lista los temas del grupo. Accesible para cualquier miembro y para el admin."""
-    topics = (
-        session.query(Topic)
-        .filter(Topic.group_id == group.id)
-        .order_by(Topic.created_at.asc())
-        .all()
-    )
-    return topics
+    """Cualquier miembro del grupo puede ver sus temas activos."""
+    return repo.list_active_topics(session, group.id)
 
 
 @router.patch("/{group_id}/topics/{topic_id}", response_model=TopicResponse)
@@ -185,8 +244,8 @@ def update_topic(
     group: Group = Depends(require_group_admin),
     session: Session = Depends(get_session),
 ) -> Topic:
-    """Modifica un tema existente. Solo permitido para el admin del grupo."""
-    topic = session.get(Topic, topic_id)
+    """SOLO admin: activa, pausa o renombra un tema existente."""
+    topic = repo.get_topic(session, topic_id)
     if not topic or topic.group_id != group.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -195,70 +254,30 @@ def update_topic(
 
     if payload.title is not None:
         topic.title = payload.title.strip()
-    if payload.description is not None:
-        topic.description = payload.description.strip()
-    if payload.is_published is not None:
-        topic.is_published = payload.is_published
-    if payload.video_id is not None:
-        topic.video_id = payload.video_id
+    if payload.is_active is not None:
+        topic.is_active = payload.is_active
 
     session.commit()
     session.refresh(topic)
     return topic
 
 
-@router.delete("/{group_id}/topics/{topic_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{group_id}/topics/{topic_id}", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 def delete_topic(
     topic_id: int,
     group: Group = Depends(require_group_admin),
     session: Session = Depends(get_session),
-) -> None:
-    """Elimina un tema del grupo. Solo permitido para el admin del grupo."""
-    topic = session.get(Topic, topic_id)
+) -> Response:
+    """SOLO admin: elimina un tema existente de su grupo."""
+    topic = repo.get_topic(session, topic_id)
     if not topic or topic.group_id != group.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "TOPIC_NOT_FOUND", "message": "El tema no existe en este grupo."},
         )
-
     session.delete(topic)
     session.commit()
-
-
-@router.get("/{group_id}/attempts", response_model=list[AttemptResponse])
-def list_all_group_attempts(
-    group: Group = Depends(require_group_admin),
-    session: Session = Depends(get_session),
-) -> list[ActivityAttempt]:
-    """Lista todos los intentos de todos los miembros del grupo. Solo para el admin."""
-    topic_ids = select(Topic.id).where(Topic.group_id == group.id)
-    attempts = (
-        session.query(ActivityAttempt)
-        .filter(ActivityAttempt.topic_id.in_(topic_ids))
-        .order_by(ActivityAttempt.created_at.desc())
-        .all()
-    )
-    return attempts
-
-
-@router.get("/{group_id}/my-attempts", response_model=list[AttemptResponse])
-def list_my_attempts(
-    group: Group = Depends(require_group_member),
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-) -> list[ActivityAttempt]:
-    """Lista SOLO los intentos del usuario autenticado dentro del grupo."""
-    topic_ids = select(Topic.id).where(Topic.group_id == group.id)
-    attempts = (
-        session.query(ActivityAttempt)
-        .filter(
-            ActivityAttempt.topic_id.in_(topic_ids),
-            ActivityAttempt.user_id == current_user.id,
-        )
-        .order_by(ActivityAttempt.created_at.desc())
-        .all()
-    )
-    return attempts
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -266,28 +285,125 @@ def list_my_attempts(
     response_model=AttemptResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def record_attempt(
+def submit_attempt(
     topic_id: int,
-    payload: AttemptCreate,
+    payload: AttemptSubmitRequest,
     group: Group = Depends(require_group_member),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
-) -> ActivityAttempt:
-    """Registra la realización de una actividad. Cualquier miembro del grupo puede realizarla."""
-    topic = session.get(Topic, topic_id)
+) -> Attempt:
+    """Cualquier miembro envía sus respuestas; calcula raw_score, penalización por reintentos y guarda el Attempt."""
+    topic = repo.get_topic(session, topic_id)
+    if not topic or topic.group_id != group.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "TOPIC_NOT_FOUND", "message": "El tema no existe en este grupo."},
+        )
+    if not topic.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "TOPIC_INACTIVE", "message": "Este tema se encuentra pausado."},
+        )
+
+    material = session.get(DidacticMaterial, topic.material_id)
+    if not material:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "MATERIAL_MISSING", "message": "El cuestionario asociado no se encuentra disponible."},
+        )
+
+    settings = get_settings()
+    grading_service = QuizAttemptGradingService(settings)
+    eval_result = grading_service.grade_submission(session, topic.material_id, payload)
+    raw_score = eval_result.raw_score
+
+    previous_attempts_count = repo.count_user_attempts(session, topic.id, current_user.id)
+    attempt_number = previous_attempts_count + 1
+
+    final_score = compute_final_score(
+        raw_score=raw_score,
+        attempt_number=attempt_number,
+        penalty_per_attempt=settings.penalty_per_attempt,
+    )
+
+    attempt = repo.save_attempt(
+        session,
+        topic_id=topic.id,
+        user_id=current_user.id,
+        attempt_number=attempt_number,
+        raw_score=raw_score,
+        final_score=final_score,
+        answers_json=json.dumps(eval_result.answers_snapshot, ensure_ascii=False),
+    )
+    session.commit()
+    session.refresh(attempt)
+    return attempt
+
+
+@router.get("/{group_id}/topics/{topic_id}/my-attempts", response_model=list[AttemptResponse])
+def get_my_attempts(
+    topic_id: int,
+    group: Group = Depends(require_group_member),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[Attempt]:
+    """El miembro consulta solo sus propios intentos en este tema."""
+    topic = repo.get_topic(session, topic_id)
+    if not topic or topic.group_id != group.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "TOPIC_NOT_FOUND", "message": "El tema no existe en este grupo."},
+        )
+    return repo.list_user_attempts(session, topic.id, current_user.id)
+
+
+@router.get("/{group_id}/topics/{topic_id}/attempts", response_model=list[AdminAttemptResponse])
+def get_all_attempts(
+    topic_id: int,
+    group: Group = Depends(require_group_admin),
+    session: Session = Depends(get_session),
+) -> list[Attempt]:
+    """SOLO admin: devuelve todos los intentos de todos los miembros para supervisar el desempeño."""
+    topic = repo.get_topic(session, topic_id)
+    if not topic or topic.group_id != group.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "TOPIC_NOT_FOUND", "message": "El tema no existe en este grupo."},
+        )
+    return repo.list_all_topic_attempts(session, topic.id)
+
+
+@router.get("/{group_id}/topics/{topic_id}/summary", response_model=TopicSummaryResponse)
+def get_topic_summary(
+    topic_id: int,
+    group: Group = Depends(require_group_admin),
+    session: Session = Depends(get_session),
+) -> dict:
+    """SOLO admin: muestra un resumen por miembro con su mejor intento, último intento y promedios."""
+    topic = repo.get_topic(session, topic_id)
     if not topic or topic.group_id != group.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "TOPIC_NOT_FOUND", "message": "El tema no existe en este grupo."},
         )
 
-    attempt = ActivityAttempt(
-        topic_id=topic.id,
-        user_id=current_user.id,
-        score=payload.score,
-        details=payload.details.strip(),
-    )
-    session.add(attempt)
-    session.commit()
-    session.refresh(attempt)
-    return attempt
+    members = repo.get_group_members(session, group.id)
+    members_summary = []
+
+    for member in members:
+        attempts = repo.list_user_attempts(session, topic.id, member.id)
+        summary = compute_member_topic_summary(
+            user_id=member.id,
+            user_name=member.nombre,
+            user_email=member.email,
+            attempts=attempts,
+        )
+        members_summary.append(summary)
+
+    return {
+        "topic_id": topic.id,
+        "group_id": group.id,
+        "title": topic.title,
+        "members_summary": members_summary,
+    }
+

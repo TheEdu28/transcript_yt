@@ -4,7 +4,7 @@ from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.database import get_session
-from app.models.group import Group, GroupMember
+from app.models.group import Group, GroupMembership
 from app.models.user import User
 from app.services.auth_service import get_current_user
 
@@ -63,8 +63,8 @@ def require_group_member(
 
     # Verificar si está registrado en la tabla de miembros
     membership = (
-        session.query(GroupMember)
-        .filter(GroupMember.group_id == group_id, GroupMember.user_id == current_user.id)
+        session.query(GroupMembership)
+        .filter(GroupMembership.group_id == group_id, GroupMembership.user_id == current_user.id)
         .first()
     )
     if not membership:

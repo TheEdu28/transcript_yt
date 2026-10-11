@@ -52,7 +52,7 @@ class VideoRepository:
           - published_in_groups: list[int]  — IDs de grupos donde es tema
         """
         from sqlalchemy import func
-        where = [Video.owner_id == owner_id]
+        where = [(Video.owner_id == owner_id) | (Video.owner_id.is_(None))]
         if status:
             where.append(Video.status == status)
         base_q = select(Video).where(*where).order_by(Video.created_at.desc())

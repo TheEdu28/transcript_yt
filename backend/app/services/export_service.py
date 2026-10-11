@@ -141,19 +141,21 @@ class ExportService:
 
     @staticmethod
     def _add_quiz_pdf(story: list, content: dict, heading: object, subheading: object, body: object, paragraph: object, spacer: object) -> None:
-        story.append(heading("Cuestionario"))
-        for index, question in enumerate(content["multiple_choice"], start=1):
-            story.extend([subheading(f"{index}. {escape(str(question['question']))}")])
-            story.extend(paragraph(f"• {escape(str(option))}", body) for option in question["options"])
+        story.append(paragraph("Cuestionario", heading))
+        for index, question in enumerate(content.get("multiple_choice", []), start=1):
+            story.append(paragraph(f"{index}. {escape(str(question['question']))}", subheading))
+            story.extend(paragraph(f"• {escape(str(option))}", body) for option in question.get("options", []))
             story.extend([paragraph(f"Evidencia: {escape(str(question['evidence_timestamp']))}", body), spacer(1, 8)])
-        story.append(heading("Preguntas abiertas"))
-        for index, question in enumerate(content["open_questions"], start=1):
-            story.extend([
-                subheading(f"{index}. {escape(str(question['question']))}"),
-                paragraph(f"Puntos esperados: {escape(', '.join(question['expected_points']))}", body),
-                paragraph(f"Evidencia: {escape(str(question['evidence_timestamp']))}", body),
-                spacer(1, 8),
-            ])
+        open_questions = content.get("open_questions", [])
+        if open_questions:
+            story.append(paragraph("Preguntas abiertas", heading))
+            for index, question in enumerate(open_questions, start=1):
+                story.extend([
+                    paragraph(f"{index}. {escape(str(question['question']))}", subheading),
+                    paragraph(f"Puntos esperados: {escape(', '.join(question.get('expected_points', [])))}", body),
+                    paragraph(f"Evidencia: {escape(str(question['evidence_timestamp']))}", body),
+                    spacer(1, 8),
+                ])
 
     @staticmethod
     def _as_markdown(material: MaterialResponse) -> str:

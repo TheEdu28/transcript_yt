@@ -1,29 +1,101 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Grupo · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
-<body><main class="shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1 id="group-title">Grupo</h1></div>
-<div id="user-bar" class="user-bar"></div></header>
-<nav class="steps" aria-label="Navegación"><a href="/ui/groups/">← Mis grupos</a></nav>
-<div id="notice" class="notice" role="status" style="display:none"></div>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grupo · AulaVideo</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">AULAVIDEO</p>
+      <h1 id="group-title">Grupo</h1>
+    </div>
+    <div id="user-bar" class="user-bar"></div>
+  </header>
 
-<!-- Temas -->
-<section class="panel accent-panel">
-  <div class="panel-heading"><p class="number">01</p><h2>Temas</h2></div>
-  <form id="topic-form" class="topic-create-form stack" style="max-width:560px">
-    <label>Título del tema<input id="topic-title" type="text" required placeholder="Ej: Fotosíntesis"></label>
-    <label>Descripción (opcional)<input id="topic-desc" type="text" placeholder="Breve descripción del tema"></label>
-    <label>Video ID (opcional)<input id="topic-video" type="number" min="1" placeholder="ID del video indexado"></label>
-    <button id="topic-btn" type="submit">Agregar tema →</button>
-  </form>
-  <div id="topics-list" class="topics-list empty-state" style="margin-top:18px">Cargando temas…</div>
-</section>
+  <nav class="steps" aria-label="Navegación">
+    <a href="/ui/groups/">← Mis grupos</a>
+  </nav>
 
-<!-- Miembros (solo admin) -->
-<section class="panel" id="members-section" style="margin-top:18px;display:none">
-  <div class="panel-heading"><p class="number">02</p><h2>Miembros</h2></div>
-  <form id="member-form" class="stack" style="max-width:360px">
-    <label>ID de usuario<input id="member-uid" type="number" min="1" placeholder="ID numérico del usuario"></label>
-    <button id="member-btn" type="submit" class="secondary">Agregar miembro →</button>
-  </form>
-  <div id="members-list" class="members-list" style="margin-top:14px"></div>
-</section>
-</main><script type="module" src="/ui/groups/detail/page.js"></script></body></html>
+  <div id="notice" class="notice" role="status" style="display:none"></div>
+
+  <!-- Información del grupo y Código de invitación -->
+  <section class="panel" style="margin-bottom:18px">
+    <div class="group-header-info">
+      <div>
+        <p class="eyebrow" style="margin:0">CÓDIGO DE ACCESO AL GRUPO</p>
+        <p style="margin:4px 0 0;font-size:13px;color:var(--muted)">Comparte este código para que los miembros puedan unirse.</p>
+      </div>
+      <div class="group-code-badge-box">
+        <span id="group-code-tag" class="group-code-tag">------</span>
+        <button id="copy-code-btn" type="button" class="group-code-copy-btn secondary" title="Copiar código al portapapeles">📋 Copiar</button>
+        <button id="regen-code-btn" type="button" class="group-code-regen-btn secondary" style="display:none" title="Generar un nuevo código">🔄 Regenerar</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Temas / Actividades -->
+  <section class="panel accent-panel">
+    <div class="panel-heading"><p class="number">01</p><h2>Temas y Actividades</h2></div>
+
+    <!-- Formulario para agregar tema (solo admin) -->
+    <form id="topic-form" class="topic-create-form stack" style="max-width:650px;display:none;margin-bottom:20px">
+      <label>Título del tema
+        <input id="topic-title" type="text" required placeholder="Ej: Fotosíntesis y Cloroplastos">
+      </label>
+      <label>Descripción (opcional)
+        <input id="topic-desc" type="text" placeholder="Breve orientación sobre el tema evaluado">
+      </label>
+
+      <!-- Selector visual de video -->
+      <div>
+        <label style="font-weight:700;font-size:13px;margin-bottom:6px;display:block">Video asociado:</label>
+        <input id="topic-video" type="hidden" value="">
+
+        <!-- Previsualización del video seleccionado -->
+        <div id="selected-video-preview" style="display:none;margin-bottom:10px"></div>
+
+        <!-- Botón para alternar el catálogo de videos -->
+        <button type="button" id="toggle-video-picker-btn" class="secondary" style="font-size:13px;padding:6px 14px">
+          🎬 Seleccionar de mis videos procesados ▼
+        </button>
+
+        <!-- Contenedor desplegable de selección -->
+        <div id="video-picker-container" class="video-picker-container" style="display:none;margin-top:10px">
+          <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Elige un video de tu historial para vincularlo a este tema:</p>
+          <div id="video-picker-grid" class="video-picker-grid">Cargando tus videos…</div>
+        </div>
+      </div>
+
+      <button id="topic-btn" type="submit" style="margin-top:8px">Publicar tema en el grupo →</button>
+    </form>
+
+    <div id="topics-list" class="topics-list empty-state">Cargando temas…</div>
+  </section>
+
+  <!-- Miembros del grupo -->
+  <section class="panel" id="members-section" style="margin-top:18px">
+    <div class="panel-heading"><p class="number">02</p><h2>Miembros del grupo</h2></div>
+
+    <!-- Formulario para agregar miembro (solo admin) -->
+    <div id="admin-member-box" style="display:none;margin-bottom:18px">
+      <form id="member-form" class="actions" style="max-width:440px;display:flex;gap:10px;align-items:flex-end">
+        <label style="flex:1">Añadir usuario por ID
+          <input id="member-uid" type="number" min="1" placeholder="Ej: 4">
+        </label>
+        <button id="member-btn" type="submit" class="secondary">Agregar miembro</button>
+      </form>
+    </div>
+
+    <div id="members-table-container">
+      <div id="members-list" class="empty-state">Cargando miembros…</div>
+    </div>
+  </section>
+</main>
+
+<script type="module" src="/ui/groups/detail/page.js"></script>
+</body>
+</html>

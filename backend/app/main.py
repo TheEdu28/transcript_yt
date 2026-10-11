@@ -10,9 +10,10 @@ from sqlalchemy import text
 from app.api.routes import router
 from app.api.routes_auth import router as auth_router
 from app.api.routes_groups import router as groups_router
+from app.core.config import get_settings
 from app.core.errors import PipelineError
 from app.db.database import Base, engine
-from app.models.group import ActivityAttempt, Group, GroupMember, Topic  # noqa: F401 - registra modelos antes de create_all
+from app.models.group import Attempt, Group, GroupMembership, Topic  # noqa: F401 - registra modelos antes de create_all
 from app.models.material import DidacticMaterial, MaterialVersion  # noqa: F401
 from app.models.user import User  # noqa: F401 - registra el modelo antes de create_all
 from app.models.video import Video  # noqa: F401 - registra el modelo antes de create_all
@@ -43,6 +44,7 @@ async def handle_pipeline_error(_request: Request, error: PipelineError) -> JSON
 @app.on_event("startup")
 def initialise_local_metadata() -> None:
     """Crea tablas y añade campos de progreso en instalaciones SQLite ya existentes."""
+    get_settings().ensure_data_directories()
     Base.metadata.create_all(bind=engine)
     with engine.begin() as connection:
         columns = {row[1] for row in connection.execute(text("PRAGMA table_info(videos)"))}
@@ -60,3 +62,28 @@ def initialise_local_metadata() -> None:
         mat_cols = {row[1] for row in connection.execute(text("PRAGMA table_info(didactic_materials)"))}
         if "owner_id" not in mat_cols:
             connection.execute(text("ALTER TABLE didactic_materials ADD COLUMN owner_id INTEGER DEFAULT NULL"))
+        group_cols = {row[1] for row in connection.execute(text("PRAGMA table_info(groups)"))}
+        if "code" not in group_cols:
+            connection.execute(text("ALTER TABLE groups ADD COLUMN code VARCHAR(6) DEFAULT NULL"))
+            # Asignar un código alfanumérico único a cada grupo existente
+            import secrets, string
+            rows = connection.execute(text("SELECT id FROM groups WHERE code IS NULL")).fetchall()
+            for r in rows:
+                generated_code = "".join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(6))
+                connection.execute(text(f"UPDATE groups SET code = '{generated_code}' WHERE id = {r[0]}"))
+
+        if "material_id" not in topic_cols:
+            connection.execute(text("ALTER TABLE topics ADD COLUMN material_id INTEGER DEFAULT NULL"))
+        if "created_by" not in topic_cols:
+            connection.execute(text("ALTER TABLE topics ADD COLUMN created_by INTEGER DEFAULT NULL"))
+        if "is_active" not in topic_cols:
+            connection.execute(text("ALTER TABLE topics ADD COLUMN is_active BOOLEAN DEFAULT 1"))
+
+        # Migrar membresías existentes de group_members a group_memberships si aplica
+        tables = {row[0] for row in connection.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))}
+        if "group_members" in tables and "group_memberships" in tables:
+            connection.execute(text("""
+                INSERT OR IGNORE INTO group_memberships (group_id, user_id, joined_at)
+                SELECT group_id, user_id, joined_at FROM group_members
+            """))
+

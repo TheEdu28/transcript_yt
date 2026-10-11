@@ -51,6 +51,7 @@ class GeminiProvider(ModelProvider):
             temperature=0.1,
             max_output_tokens=self.settings.max_gemini_output_tokens,
             response_schema=response_schema,
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
 
         response = None

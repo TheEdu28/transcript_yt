@@ -2,20 +2,23 @@
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.errors import PipelineError
 from app.db.database import SessionLocal, get_session
+from app.models.material import DidacticMaterial
+from app.models.user import User
+from app.models.video import Video
+from app.models.group import GroupMember, Topic
 from app.repositories.video_repository import VideoRepository
 from app.schemas.contracts import (
     ExportFormat, FeedbackRequest, FeedbackResponse, IngestAcceptedResponse, IngestRequest, IngestResponse,
     MaterialResponse, MaterialUpdateRequest, MaterialVersionsResponse, ModelsResponse, ProgressResponse,
-    QuizRequest, QuizResponse, SummaryRequest, SummaryResponse, VideoHistoryResponse,
+    QuizRequest, QuizResponse, SummaryRequest, SummaryResponse, VideoDetailResponse, VideoHistoryResponse,
 )
 from app.services.auth_service import get_current_user
-from app.models.user import User
-from app.models.group import GroupMember, Topic
 from app.services.export_service import ExportService
 from app.services.feedback_service import FeedbackService
 from app.services.material_service import MaterialService
@@ -112,6 +115,15 @@ def ingest_video_async(
         raise_http(error)
 
 
+@router.get("/videos/{video_id}", response_model=VideoDetailResponse)
+def get_video(video_id: int, session: Session = Depends(get_session)) -> Video:
+    """Devuelve los metadatos de un video, incluyendo su youtube_id para el reproductor."""
+    video = VideoRepository().get(session, video_id)
+    if not video:
+        raise_http(PipelineError("El video no existe.", code="VIDEO_NOT_FOUND", status_code=404))
+    return video
+
+
 @router.get("/videos/{video_id}/progress", response_model=ProgressResponse)
 def get_ingestion_progress(video_id: int, session: Session = Depends(get_session)) -> ProgressResponse:
     """HU-02: retrieve the latest durable stage and percentage of an ingestion job."""
@@ -153,6 +165,24 @@ def generate_quiz(payload: QuizRequest, session: Session = Depends(get_session))
         )
     except PipelineError as error:
         raise_http(error)
+
+
+@router.get("/materials", response_model=list[MaterialResponse])
+def list_my_materials(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> list[MaterialResponse]:
+    """Lista todos los materiales didácticos generados (resúmenes y cuestionarios)."""
+    materials = session.scalars(
+        select(DidacticMaterial)
+        .where((DidacticMaterial.owner_id == current_user.id) | (DidacticMaterial.owner_id.is_(None)))
+        .order_by(DidacticMaterial.id.desc())
+    ).all()
+    svc = MaterialService()
+    return [
+        svc._as_response(session, m.id, m.video_id, m.material_type, m.content_json)
+        for m in materials
+    ]
 
 
 @router.get("/materials/{material_id}", response_model=MaterialResponse)

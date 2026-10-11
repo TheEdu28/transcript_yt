@@ -1,3 +1,101 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Cuestionario · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
-<body><main class="shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1>Autoevaluación</h1><p id="video-label" class="lede"></p></div><div id="user-bar" class="user-bar"></div></header><nav class="steps" aria-label="Flujo"><a href="/ui/video/">1. Ingesta</a><i></i><a id="summary-link" href="/ui/resumen/">2. Resumen</a><i></i><span>3. Cuestionario</span><i></i><a id="material-link" href="/ui/material/">4. Materiales</a></nav><div id="notice" class="notice" role="status"></div><section class="panel"><div class="panel-heading"><p class="number">03</p><h2>Configurar cuestionario</h2></div><fieldset class="bloom-fieldset"><legend>Niveles de Bloom</legend><div class="bloom-options"><label><input type="checkbox" value="remember" checked> Recordar</label><label><input type="checkbox" value="understand" checked> Comprender</label><label><input type="checkbox" value="apply" checked> Aplicar</label><label><input type="checkbox" value="analyze"> Analizar</label><label><input type="checkbox" value="evaluate"> Evaluar</label><label><input type="checkbox" value="create"> Crear</label></div></fieldset><div class="count-row"><label>Opción múltiple<input id="multiple-count" type="number" min="1" max="10" value="5"></label><label>Abiertas<input id="open-count" type="number" min="1" max="8" value="3"></label></div><div id="model-selector-container"></div><button id="generate-button" type="button">Generar cuestionario</button></section><section class="panel output-panel"><div class="panel-heading"><p class="number">04</p><h2>Responde</h2></div><form id="quiz-output" class="empty-state">Genera o abre un cuestionario para responderlo aquí.</form><button id="feedback-button" type="button" disabled>Revisar respuestas</button><div id="feedback-output" class="feedback-output"></div></section></main><script type="module" src="/ui/quiz/page.js"></script></body></html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cuestionario · AulaVideo</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">AULAVIDEO</p>
+      <h1>Autoevaluación</h1>
+      <p id="video-label" class="lede"></p>
+      <div id="video-select-box" style="margin-top:8px;display:none">
+        <label style="font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:6px">
+          Ver otro video:
+          <select id="video-switcher" style="padding:4px 8px;border-radius:6px;border:1px solid #cfd8e7;background:#fff;font:inherit;font-size:13px"></select>
+        </label>
+      </div>
+    </div>
+    <div id="user-bar" class="user-bar"></div>
+  </header>
+
+  <nav class="steps" aria-label="Flujo">
+    <a href="/ui/video/">1. Ingesta</a><i></i>
+    <a id="summary-link" href="/ui/resumen/">2. Resumen</a><i></i>
+    <span>3. Cuestionario</span><i></i>
+    <a id="material-link" href="/ui/material/">4. Materiales</a>
+  </nav>
+
+  <div id="notice" class="notice" role="status"></div>
+
+  <!-- Reproductor de YouTube embebido -->
+  <section class="panel" id="player-panel" style="margin-bottom:18px;display:none">
+    <div class="panel-heading">
+      <p class="number">▶</p>
+      <h2 id="player-video-title">Video de referencia</h2>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 10px">
+      Puedes consultar el video o hacer clic en los timestamps de evidencia de cada pregunta para verificar la respuesta.
+    </p>
+    <div class="video-container" style="position:relative;width:100%;padding-top:56.25%;background:#000;border-radius:12px;overflow:hidden">
+      <div id="yt-player" style="position:absolute;top:0;left:0;width:100%;height:100%"></div>
+    </div>
+  </section>
+
+  <!-- Configurar cuestionario -->
+  <section class="panel">
+    <div class="panel-heading">
+      <p class="number">03</p>
+      <h2>Configurar cuestionario</h2>
+    </div>
+    <fieldset class="bloom-fieldset">
+      <legend>Niveles de Bloom</legend>
+      <div class="bloom-options">
+        <label><input type="checkbox" value="remember" checked> Recordar</label>
+        <label><input type="checkbox" value="understand" checked> Comprender</label>
+        <label><input type="checkbox" value="apply" checked> Aplicar</label>
+        <label><input type="checkbox" value="analyze"> Analizar</label>
+        <label><input type="checkbox" value="evaluate"> Evaluar</label>
+        <label><input type="checkbox" value="create"> Crear</label>
+      </div>
+    </fieldset>
+    <div class="count-row">
+      <label>Opción múltiple
+        <input id="multiple-count" type="number" min="1" max="10" value="5">
+      </label>
+      <label>Abiertas
+        <input id="open-count" type="number" min="1" max="8" value="3">
+      </label>
+    </div>
+    <div id="model-selector-container"></div>
+    <button id="generate-button" type="button">Generar cuestionario</button>
+  </section>
+
+  <!-- Responder cuestionario -->
+  <section class="panel output-panel">
+    <div class="panel-heading">
+      <p class="number">04</p>
+      <h2>Responde</h2>
+    </div>
+
+    <!-- Acciones de exportación -->
+    <div id="quiz-export-actions" class="export-group" style="display:none;margin-bottom:14px">
+      <span style="font-size:13px;font-weight:700;color:#475569">Exportar cuestionario:</span>
+      <button id="quiz-export-md" type="button" class="export-btn export-btn--md" title="Descargar como Markdown">📝 Markdown</button>
+      <button id="quiz-export-pdf" type="button" class="export-btn export-btn--pdf" title="Descargar como PDF">📄 PDF</button>
+      <button id="quiz-export-docx" type="button" class="export-btn export-btn--docx" title="Descargar como Word (.docx)">📘 Word (.docx)</button>
+    </div>
+
+    <form id="quiz-output" class="empty-state">Genera o abre un cuestionario para responderlo aquí.</form>
+    <button id="feedback-button" type="button" disabled>Revisar respuestas</button>
+    <div id="feedback-output" class="feedback-output"></div>
+  </section>
+</main>
+
+<script type="module" src="/ui/quiz/page.js"></script>
+</body>
+</html>

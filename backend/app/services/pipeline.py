@@ -375,7 +375,20 @@ class VectorStoreService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
         import chromadb
-        self.client = chromadb.PersistentClient(path=str(settings.chroma_persist_directory))
+        from chromadb.config import Settings as ChromaSettings
+
+        try:
+            # Desactiva la captura defectuosa de posthog en versiones con incompatibilidad de firma
+            import chromadb.telemetry.product.posthog as chroma_ph
+
+            chroma_ph.Posthog.capture = lambda self, event: None  # type: ignore[assignment]
+        except Exception:
+            pass
+
+        self.client = chromadb.PersistentClient(
+            path=str(settings.chroma_persist_directory),
+            settings=ChromaSettings(anonymized_telemetry=False),
+        )
         self.collection = self.client.get_or_create_collection(
             name=settings.chroma_collection_name, metadata={"hnsw:space": "cosine"},
         )
@@ -383,7 +396,13 @@ class VectorStoreService:
     def _encoder(self) -> Any:
         if self._embedder is None:
             from sentence_transformers import SentenceTransformer
-            self._embedder = SentenceTransformer(self.settings.embedding_model)
+
+            try:
+                # Carga inmediata desde la caché local sin consultas de red a huggingface.co
+                self._embedder = SentenceTransformer(self.settings.embedding_model, local_files_only=True)
+            except Exception:
+                # Si el modelo no ha sido descargado aún, permite la descarga normal
+                self._embedder = SentenceTransformer(self.settings.embedding_model)
         return self._embedder
 
     def index(self, video_id: int, chunks: list[TranscriptChunk]) -> None:

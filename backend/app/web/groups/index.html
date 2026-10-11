@@ -4,14 +4,23 @@
 <div id="user-bar" class="user-bar"></div></header>
 <div id="notice" class="notice" role="status" style="display:none"></div>
 
-<section class="panel accent-panel">
-  <div class="panel-heading"><p class="number">01</p><h2>Crear grupo</h2></div>
-  <a class="primary-action" href="/ui/video/">Procesar un video →</a>
-  <form id="create-form" class="stack" style="max-width:480px">
-    <label>Nombre del grupo<input id="group-name" type="text" required placeholder="Ej: Biología 3°A"></label>
-    <button id="create-btn" type="submit">Crear grupo →</button>
-  </form>
-</section>
+<div class="grid-2-col" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+  <section class="panel accent-panel">
+    <div class="panel-heading"><p class="number">01</p><h2>Crear grupo</h2></div>
+    <form id="create-form" class="stack">
+      <label>Nombre del grupo<input id="group-name" type="text" required placeholder="Ej: Biología 3°A"></label>
+      <button id="create-btn" type="submit">Crear grupo →</button>
+    </form>
+  </section>
+
+  <section class="panel accent-panel">
+    <div class="panel-heading"><p class="number">02</p><h2>Unirse con código</h2></div>
+    <form id="join-form" class="stack">
+      <label>Código de acceso (6 caracteres)<input id="join-code" type="text" maxlength="6" required placeholder="Ej: AB12CD" style="text-transform:uppercase"></label>
+      <button id="join-btn" type="submit">Unirse al grupo →</button>
+    </form>
+  </section>
+</div>
 
 <section class="panel" style="margin-top:18px">
   <div class="panel-heading"><p class="number">02</p><h2>Mis grupos</h2></div>
