@@ -12,7 +12,7 @@ export function renderUserBar() {
   const user = auth.user();
   if (!user) return;
   bar.innerHTML = `<details class="user-menu">
-    <summary class="user-menu-trigger">${escapeHtml(user.nombre)} <span aria-hidden="true">⌄</span></summary>
+    <summary class="user-menu-trigger">${escapeHtml(user.nombre)} <svg class="ui-icon" aria-hidden="true" style="margin-left:4px" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></summary>
     <div class="user-menu-panel">
       <a href="/ui/groups/">Mis grupos</a>
       <a href="/ui/video/">Procesar video</a>
@@ -87,7 +87,7 @@ export function initModelSelector(containerId, fetchModels) {
 
     const optgroups = Object.entries(byProvider).map(([provider, providerModels]) => {
       const options = providerModels.map((m) => {
-        const quota = m.quota_exhausted ? " ⚠️ Cuota agotada" : "";
+        const quota = m.quota_exhausted ? " [Cuota agotada]" : "";
         const unavailable = !m.available ? " (sin API key)" : "";
         return `<option value="${escapeHtml(m.model_id)}"
           ${m.model_id === default_model_id ? "selected" : ""}

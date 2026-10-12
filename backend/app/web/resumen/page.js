@@ -171,7 +171,7 @@ function renderTimestampButton(timestampStr, endStr = null) {
   const title = endStr
     ? `Reproducir bloque (${escapeHtml(timestampStr)} hasta ${escapeHtml(endStr)})`
     : `Saltar a ${escapeHtml(timestampStr)}`;
-  return `<button type="button" class="timestamp" data-timestamp="${escapeHtml(timestampStr)}"${dataEnd} title="${title}">⏱ ${escapeHtml(timestampStr)}</button>`;
+  return `<button type="button" class="timestamp" data-timestamp="${escapeHtml(timestampStr)}"${dataEnd} title="${title}"><svg class="ui-icon" style="width:0.95em;height:0.95em" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${escapeHtml(timestampStr)}</button>`;
 }
 
 function updateExportVisibility(matId) {
@@ -289,7 +289,7 @@ function setupExportHandlers() {
       a.remove();
       window.URL.revokeObjectURL(url);
 
-      showNotice(`✓ Archivo ${filename} descargado con éxito.`, "success");
+      showNotice(`Archivo ${filename} descargado con éxito.`, "success");
     } catch (err) {
       showNotice(`Error al exportar: ${err.message}`, "error");
     }

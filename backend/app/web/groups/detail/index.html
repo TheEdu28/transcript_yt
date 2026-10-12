@@ -39,10 +39,10 @@
           <p class="eyebrow" style="margin:0 0 6px">CÓDIGO DE CLASE</p>
           <div style="display:flex;align-items:center;justify-content:space-between;background:#f0f4ff;border:1px solid #c9d5fa;padding:8px 12px;border-radius:10px;margin-bottom:10px">
             <span id="group-code-tag" style="font-family:monospace;font-size:18px;font-weight:800;letter-spacing:2px;color:var(--blue)">------</span>
-            <button id="copy-code-btn" type="button" class="secondary" style="padding:4px 8px;font-size:12px" title="Copiar al portapapeles">📋 Copiar</button>
+            <button id="copy-code-btn" type="button" class="secondary btn-icon" style="padding:4px 8px;font-size:12px" title="Copiar al portapapeles"><svg class="ui-icon icon-copy" aria-hidden="true" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copiar código</button>
           </div>
           <p style="margin:0 0 10px;font-size:12px;color:var(--muted);line-height:1.4">Comparte este código para que los miembros se unan al grupo.</p>
-          <button id="regen-code-btn" type="button" class="secondary" style="display:none;width:100%;font-size:12px;padding:6px 10px" title="Generar un nuevo código">🔄 Regenerar código</button>
+          <button id="regen-code-btn" type="button" class="secondary btn-icon" style="display:none;width:100%;font-size:12px;padding:6px 10px;justify-content:center" title="Generar un nuevo código"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Regenerar código</button>
         </div>
       </aside>
 
@@ -64,7 +64,7 @@
           <form id="topic-form" class="topic-create-form stack" style="display:none;padding:18px;border:1px solid #c9d5fa;border-radius:12px;background:#fff;margin-bottom:20px">
             <div style="display:flex;justify-content:space-between;align-items:center">
               <strong style="font-size:14px;color:var(--blue)">Crear nuevo tema</strong>
-              <button id="cancel-topic-btn" type="button" class="secondary" style="padding:3px 10px;font-size:12px">✕ Cancelar</button>
+              <button id="cancel-topic-btn" type="button" class="secondary btn-icon" style="padding:3px 10px;font-size:12px"><svg class="ui-icon icon-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancelar</button>
             </div>
 
             <label>Título del tema
@@ -81,8 +81,8 @@
 
               <div id="selected-video-preview" style="display:none;margin-bottom:10px"></div>
 
-              <button type="button" id="toggle-video-picker-btn" class="secondary" style="font-size:13px;padding:6px 14px">
-                🎬 Seleccionar de mis videos procesados ▼
+              <button type="button" id="toggle-video-picker-btn" class="secondary btn-icon" style="font-size:13px;padding:6px 14px">
+                    <svg class="ui-icon icon-video" aria-hidden="true" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> Seleccionar de mis videos procesados <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24" style="width:0.8em;height:0.8em"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
 
               <div id="video-picker-container" class="video-picker-container" style="display:none;margin-top:10px">
@@ -134,7 +134,7 @@
           <p class="eyebrow" style="margin:0">EVALUACIONES Y RENDIMIENTO</p>
           <h2 style="margin:2px 0 0;font-size:20px">Libro de Calificaciones</h2>
         </div>
-        <button id="refresh-grades-btn" type="button" class="secondary" style="font-size:12px;padding:6px 12px">🔄 Actualizar notas</button>
+        <button id="refresh-grades-btn" type="button" class="secondary btn-icon" style="font-size:12px;padding:6px 12px"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Actualizar notas</button>
       </div>
       <p style="font-size:13px;color:var(--muted);margin:0 0 18px">
         Las evaluaciones se corrigen automáticamente mediante evidencia RAG extraída del video. Los administradores pueden revisar las respuestas y ajustar la calificación final de cada intento.
@@ -162,7 +162,7 @@
           <textarea id="grade-modal-notes" rows="3" placeholder="Ej: Respuesta abierta enriquecida con análisis adecuado..."></textarea>
         </label>
         <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:10px">
-          <button type="button" id="grade-modal-cancel" class="secondary">Cancelar</button>
+          <button type="button" id="grade-modal-cancel" class="secondary btn-icon"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Cancelar</button>
           <button type="submit" id="grade-modal-submit">Guardar calificación</button>
         </div>
       </form>

@@ -7,7 +7,7 @@ from pathlib import Path
 # Desactivar telemetría anónima de ChromaDB a nivel global
 os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
@@ -58,6 +58,19 @@ class Settings(BaseSettings):
     processed_transcripts_directory: Path = DATA_DIR / "transcripts" / "processed"
     audio_directory: Path = DATA_DIR / "audio"
     export_directory: Path = DATA_DIR / "exports"
+
+    @model_validator(mode="after")
+    def resolve_paths(self) -> "Settings":
+        if self.sqlite_database_url.startswith("sqlite:///"):
+            raw_path = self.sqlite_database_url[len("sqlite:///"):]
+            path_obj = Path(raw_path)
+            if not path_obj.is_absolute():
+                if raw_path.startswith("../"):
+                    resolved = (PROJECT_ROOT / "backend" / raw_path).resolve()
+                else:
+                    resolved = (PROJECT_ROOT / raw_path).resolve()
+                self.sqlite_database_url = f"sqlite:///{resolved.as_posix()}"
+        return self
 
     @property
     def resolved_yt_dlp_cookie_file(self) -> Path:

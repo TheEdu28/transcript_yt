@@ -118,7 +118,7 @@ function renderQuiz(quiz) {
         </div>
         <div style="margin-top:8px">
           <button type="button" class="timestamp quiz-ts-btn" data-ts="${escapeHtml(question.evidence_timestamp)}">
-            ⏱ Evidencia: ${escapeHtml(question.evidence_timestamp)}
+            <svg class="ui-icon" style="width:0.95em;height:0.95em" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Evidencia: ${escapeHtml(question.evidence_timestamp)}
           </button>
         </div>
       </article>`
@@ -138,7 +138,7 @@ function renderQuiz(quiz) {
         </label>
         <div style="margin-top:8px">
           <button type="button" class="timestamp quiz-ts-btn" data-ts="${escapeHtml(question.evidence_timestamp)}">
-            ⏱ Evidencia: ${escapeHtml(question.evidence_timestamp)}
+            <svg class="ui-icon" style="width:0.95em;height:0.95em" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Evidencia: ${escapeHtml(question.evidence_timestamp)}
           </button>
         </div>
       </article>`
@@ -169,9 +169,12 @@ async function loadStoredQuiz(id) {
   if (material.video_id) {
     videoId = material.video_id;
     byId("video-label").textContent = `Video ID: ${material.video_id}`;
-    byId("summary-link").href = urlFor("/ui/resumen/", { video: material.video_id });
+    const pageParams = { video: material.video_id, material: material.id };
+    if (groupId) pageParams.group = groupId;
+    if (topicId) pageParams.topic = topicId;
+    byId("summary-link").href = urlFor("/ui/resumen/", pageParams);
     byId("material-link").href = urlFor("/ui/material/", { video: material.video_id, material: material.id });
-    replaceUrl("/ui/quiz/", { video: material.video_id, material: material.id });
+    replaceUrl("/ui/quiz/", pageParams);
     loadVideoPlayer(material.video_id);
   }
   showNotice(`Cuestionario ${id} cargado.`, "success");
@@ -218,7 +221,7 @@ function setupExportHandlers() {
       a.remove();
       window.URL.revokeObjectURL(url);
 
-      showNotice(`✓ Archivo ${filename} descargado con éxito.`, "success");
+      showNotice(`Archivo ${filename} descargado con éxito.`, "success");
     } catch (err) {
       showNotice(`Error al exportar: ${err.message}`, "error");
     }
@@ -252,17 +255,18 @@ async function init() {
         navSteps.insertBefore(sep, navSteps.children[1]);
       }
 
-      if (topicMats?.quiz) {
-        activeMaterialId = topicMats.quiz.id;
-        materialId = topicMats.quiz.id;
-        renderQuiz(topicMats.quiz.content);
-        updateExportVisibility(topicMats.quiz.id);
+      const quizMat = topicMats?.shared_quiz || topicMats?.personal_quiz || topicMats?.quiz;
+      if (quizMat) {
+        activeMaterialId = quizMat.id;
+        materialId = quizMat.id;
+        renderQuiz(quizMat.content);
+        updateExportVisibility(quizMat.id);
 
         const banner = document.createElement("div");
         banner.className = "notice";
         banner.style.borderLeft = "4px solid var(--violet)";
         banner.style.marginBottom = "14px";
-        banner.innerHTML = `<strong>Evaluación del tema:</strong> ${escapeHtml(topicMats.title)} · <em>Las respuestas se calificarán y registrarán en el libro de calificaciones del grupo.</em>`;
+        banner.innerHTML = `<strong>Evaluación del tema:</strong> ${escapeHtml(topicMats.title || "Actividad de grupo")} · <em>Las respuestas se calificarán y registrarán en el libro de calificaciones del grupo.</em>`;
         byId("quiz-output")?.parentNode.insertBefore(banner, byId("quiz-output"));
 
         if (topicMats.video_id) {
@@ -272,7 +276,7 @@ async function init() {
           byId("material-link").href = urlFor("/ui/material/", { video: videoId, material: materialId });
           loadVideoPlayer(videoId);
         }
-        showNotice(`Evaluación del tema «${topicMats.title}» lista para responder.`, "info");
+        showNotice(`Evaluación del tema lista para responder.`, "info");
         return;
       }
     } catch (err) {
@@ -421,6 +425,7 @@ byId("feedback-button").addEventListener("click", async () => {
 
       // Si estamos en un tema de grupo, registrar el intento oficial en el grupo
       let attemptResult = null;
+      let attemptErrorMsg = null;
       if (groupId && topicId) {
         try {
           const attemptPayload = {
@@ -431,7 +436,8 @@ byId("feedback-button").addEventListener("click", async () => {
           };
           attemptResult = await apiSubmitAttempt(groupId, topicId, attemptPayload);
         } catch (attemptErr) {
-          console.warn("No se pudo registrar intento en grupo, evaluando solo retroalimentación:", attemptErr);
+          console.warn("No se pudo registrar intento en grupo:", attemptErr);
+          attemptErrorMsg = attemptErr.message || "Error al registrar el intento en el grupo.";
         }
       }
 
@@ -446,7 +452,7 @@ byId("feedback-button").addEventListener("click", async () => {
         .map(
           (item) => `
           <div class="feedback-item ${item.is_correct ? "good" : "bad"}">
-            <strong>Pregunta ${item.question_index + 1}: ${item.is_correct ? "Correcta ✓" : "Por revisar ✗"}</strong><br>
+            <strong style="display:inline-flex;align-items:center;gap:4px">Pregunta ${item.question_index + 1}: ${item.is_correct ? 'Correcta <svg class="ui-icon" style="color:var(--mint)" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : 'Por revisar <svg class="ui-icon" style="color:var(--red)" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'}</strong><br>
             ${escapeHtml(item.explanation)}
           </div>`
         )
@@ -473,6 +479,13 @@ byId("feedback-button").addEventListener("click", async () => {
               <p style="margin:2px 0 0;font-size:12px;color:var(--muted)">Intento #${attemptResult.id} guardado en el grupo. Tu profesor podrá revisarlo.</p>
             </div>
             <a href="/ui/groups/detail/?group=${groupId}" class="secondary" style="text-decoration:none;font-size:12px;padding:6px 12px">Ver mis calificaciones →</a>
+          </div>
+        `;
+      } else if (attemptErrorMsg) {
+        scoreBanner = `
+          <div style="background:#fef2f2;border:2px solid #ef4444;border-radius:10px;padding:14px;margin-bottom:14px">
+            <strong style="font-size:15px;color:#b91c1c;display:flex;align-items:center;gap:6px"><svg class="ui-icon" style="color:#b91c1c" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Aviso al registrar la calificación en el grupo</strong>
+            <p style="margin:4px 0 0;font-size:13px;color:#7f1d1d">${escapeHtml(attemptErrorMsg)}</p>
           </div>
         `;
       }

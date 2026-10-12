@@ -268,14 +268,14 @@ class OpenQuestionEvaluation(BaseModel):
     score: float = Field(..., ge=0.0, le=1.0, description="Calificación continua entre 0.0 y 1.0 basada en la evidencia.")
     is_correct: bool = Field(..., description="True si la respuesta alcanza suficiencia pedagógica (score >= 0.7).")
     feedback_text: str = Field(..., description="Explicación pedagógica breve fundamentada exclusivamente en la evidencia.")
-    missing_points: list[str] = Field(default_factory=list, description="Ideas clave que faltaron según la evidencia.")
+    missing_points: list[str] = Field(description="Ideas clave que faltaron según la evidencia.")
 
 
 class OpenQuestionsEvaluationBatch(BaseModel):
     """Contrato JSON que Gemini debe devolver para la evaluación estructurada de preguntas abiertas."""
 
     evaluations: list[OpenQuestionEvaluation]
-    evidence_sufficient: bool = Field(default=True, description="False si la evidencia no basta para evaluar.")
+    evidence_sufficient: bool = Field(description="False si la evidencia no basta para evaluar.")
     insufficiency_note: str | None = None
 
 
@@ -514,11 +514,13 @@ class MemberTopicGrade(BaseModel):
     topic_title: str
     status: Literal["evaluated", "pending"]
     total_attempts: int = 0
+    attempts_count: int = 0
     best_final_score: float | None = None
     best_raw_score: float | None = None
     latest_final_score: float | None = None
     latest_attempt_id: int | None = None
     latest_submitted_at: datetime | None = None
+    review_notes: str | None = None
 
 
 class MemberGradeSummary(BaseModel):
@@ -527,10 +529,13 @@ class MemberGradeSummary(BaseModel):
     user_id: int
     user_name: str
     user_email: str
+    nombre: str | None = None
+    email: str | None = None
     completed_topics: int
     total_topics: int
     average_score: float | None = None
-    topics: list[MemberTopicGrade]
+    topics: list[MemberTopicGrade] = Field(default_factory=list)
+    topic_grades: dict[str | int, Any] = Field(default_factory=dict)
 
 
 class GroupGradesResponse(BaseModel):
@@ -540,6 +545,8 @@ class GroupGradesResponse(BaseModel):
     group_name: str
     is_admin: bool
     total_topics: int
+    topics: list[TopicResponse] = Field(default_factory=list)
     members: list[MemberGradeSummary]
+
 
 

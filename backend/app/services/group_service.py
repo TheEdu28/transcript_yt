@@ -387,6 +387,7 @@ class GroupService:
         """Genera el libro de calificaciones: matriz completa para admin, individual para miembro."""
         is_admin = group.admin_id == current_user.id
         topics = self.repository.list_active_topics(session, group.id)
+        topics_responses = self.list_topics_with_materials(session, group)
         total_topics = len(topics)
 
         members = self.repository.get_group_members(session, group.id) if is_admin else [current_user]
@@ -394,6 +395,7 @@ class GroupService:
 
         for member in members:
             member_topics_grade: list[MemberTopicGrade] = []
+            topic_grades_dict: dict[str, Any] = {}
             completed_count = 0
             final_scores: list[float] = []
 
@@ -404,33 +406,64 @@ class GroupService:
                     best_att = max(attempts, key=lambda a: (a.final_score, a.raw_score))
                     latest_att = max(attempts, key=lambda a: a.attempt_number)
                     final_scores.append(best_att.final_score)
-                    member_topics_grade.append(
-                        MemberTopicGrade(
-                            topic_id=t.id,
-                            topic_title=t.title,
-                            status="evaluated",
-                            total_attempts=len(attempts),
-                            best_final_score=best_att.final_score,
-                            best_raw_score=best_att.raw_score,
-                            latest_final_score=latest_att.final_score,
-                            latest_attempt_id=latest_att.id,
-                            latest_submitted_at=latest_att.submitted_at,
-                        )
+
+                    review_notes = None
+                    try:
+                        ans_data = json.loads(latest_att.answers_json) if latest_att.answers_json else {}
+                        if isinstance(ans_data, dict):
+                            review_notes = ans_data.get("review_notes")
+                    except Exception:
+                        pass
+
+                    grade_item = MemberTopicGrade(
+                        topic_id=t.id,
+                        topic_title=t.title,
+                        status="evaluated",
+                        total_attempts=len(attempts),
+                        attempts_count=len(attempts),
+                        best_final_score=best_att.final_score,
+                        best_raw_score=best_att.raw_score,
+                        latest_final_score=latest_att.final_score,
+                        latest_attempt_id=latest_att.id,
+                        latest_submitted_at=latest_att.submitted_at,
+                        review_notes=review_notes,
                     )
+                    member_topics_grade.append(grade_item)
+
+                    info = {
+                        "submitted": True,
+                        "attempts_count": len(attempts),
+                        "raw_score": latest_att.raw_score,
+                        "final_score": latest_att.final_score,
+                        "attempt_id": latest_att.id,
+                        "review_notes": review_notes,
+                    }
+                    topic_grades_dict[str(t.id)] = info
                 else:
-                    member_topics_grade.append(
-                        MemberTopicGrade(
-                            topic_id=t.id,
-                            topic_title=t.title,
-                            status="pending",
-                            total_attempts=0,
-                            best_final_score=None,
-                            best_raw_score=None,
-                            latest_final_score=None,
-                            latest_attempt_id=None,
-                            latest_submitted_at=None,
-                        )
+                    grade_item = MemberTopicGrade(
+                        topic_id=t.id,
+                        topic_title=t.title,
+                        status="pending",
+                        total_attempts=0,
+                        attempts_count=0,
+                        best_final_score=None,
+                        best_raw_score=None,
+                        latest_final_score=None,
+                        latest_attempt_id=None,
+                        latest_submitted_at=None,
+                        review_notes=None,
                     )
+                    member_topics_grade.append(grade_item)
+
+                    info = {
+                        "submitted": False,
+                        "attempts_count": 0,
+                        "raw_score": None,
+                        "final_score": None,
+                        "attempt_id": None,
+                        "review_notes": None,
+                    }
+                    topic_grades_dict[str(t.id)] = info
 
             avg_score = round(sum(final_scores) / len(final_scores), 2) if final_scores else None
 
@@ -439,10 +472,13 @@ class GroupService:
                     user_id=member.id,
                     user_name=member.nombre,
                     user_email=member.email,
+                    nombre=member.nombre,
+                    email=member.email,
                     completed_topics=completed_count,
                     total_topics=total_topics,
                     average_score=avg_score,
                     topics=member_topics_grade,
+                    topic_grades=topic_grades_dict,
                 )
             )
 
@@ -451,6 +487,7 @@ class GroupService:
             group_name=group.name,
             is_admin=is_admin,
             total_topics=total_topics,
+            topics=topics_responses,
             members=members_summary,
         )
 

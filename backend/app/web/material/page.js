@@ -32,7 +32,7 @@ function glossaryRowHtml(item = {}, index) {
       <label>Definición<input class="g-def" type="text" value="${escapeHtml(item.definition || "")}" placeholder="Definición"></label>
       <label>Timestamp<input class="g-ts" type="text" value="${escapeHtml(item.timestamp || "")}" placeholder="00:00:00" pattern="\\d{2}:\\d{2}:\\d{2}"></label>
     </div>
-    <button type="button" class="row-delete" title="Eliminar">✕</button>
+    <button type="button" class="row-delete" title="Eliminar"><svg class="ui-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   </div>`;
 }
 
@@ -44,7 +44,7 @@ function blockRowHtml(item = {}, index) {
       <label style="grid-column:1/3">Explicación<textarea class="b-exp" rows="2">${escapeHtml(item.explanation || "")}</textarea></label>
       <label>Timestamps (separados por coma)<input class="b-ts" type="text" value="${escapeHtml(timestamps)}" placeholder="00:01:00, 00:02:30"></label>
     </div>
-    <button type="button" class="row-delete" title="Eliminar">✕</button>
+    <button type="button" class="row-delete" title="Eliminar"><svg class="ui-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
   </div>`;
 }
 
@@ -85,7 +85,7 @@ function renderQuizViewer(content) {
         return `
           <div style="padding:6px 10px;margin-top:4px;border-radius:6px;border:1px solid ${isCorrect ? '#86efac' : '#e2e8f0'};background:${isCorrect ? '#f0fdf4' : '#fff'};font-size:13px;display:flex;align-items:center;justify-content:space-between">
             <span><strong>${String.fromCharCode(65 + optIdx)})</strong> ${escapeHtml(opt)}</span>
-            ${isCorrect ? `<span style="font-size:11px;font-weight:700;color:#16a34a;background:#dcfce7;padding:1px 6px;border-radius:4px">✓ Correcta</span>` : ""}
+            ${isCorrect ? `<span style="display:inline-flex;align-items:center;gap:3px;font-size:11px;font-weight:700;color:#16a34a;background:#dcfce7;padding:1px 6px;border-radius:4px"><svg class="ui-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> Correcta</span>` : ""}
           </div>
         `;
       }).join("");
@@ -291,7 +291,7 @@ async function downloadExport(format) {
       a.remove();
       window.URL.revokeObjectURL(url);
 
-      showNotice(`✓ Archivo ${filename} descargado con éxito.`, "success");
+      showNotice(`Archivo ${filename} descargado con éxito.`, "success");
     } catch (err) {
       showNotice(`Error en la exportación: ${err.message}`, "error");
     }
@@ -316,7 +316,7 @@ async function populateMaterialsDropdown() {
 
     let options = '<option value="">-- Elige un material generado (' + list.length + ') --</option>';
     options += list.map((m) => {
-      const typeLabel = m.material_type === "summary" ? "📝 Resumen" : "❓ Cuestionario";
+      const typeLabel = m.material_type === "summary" ? "Resumen" : "Cuestionario";
       return `<option value="${m.id}">Material #${m.id} · ${typeLabel} (Video #${m.video_id})</option>`;
     }).join("");
 

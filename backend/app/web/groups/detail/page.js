@@ -156,7 +156,7 @@ function selectVideoForTopic(video) {
         <strong style="font-size:13px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(video.title)}</strong>
         <span style="font-size:12px;color:var(--muted)">Video #${video.id} · Duración: ${formatDuration(video.duration_seconds)}</span>
       </div>
-      <button type="button" id="clear-selected-video-btn" class="secondary" style="font-size:12px;padding:4px 8px" title="Quitar video">✕</button>
+      <button type="button" id="clear-selected-video-btn" class="secondary btn-icon" style="font-size:12px;padding:4px 8px" title="Quitar video"><svg class="ui-icon icon-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
   `;
 
@@ -203,19 +203,24 @@ function renderTopics(topics) {
       const quizId = t.quiz_id || t.material_id;
       if (quizId) quizParams.material = quizId;
 
+      const checkIcon = `<svg class="ui-icon" viewBox="0 0 24 24" style="color:#16a34a"><polyline points="20 6 9 17 4 12"/></svg>`;
+      const bookIcon = `<svg class="ui-icon icon-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`;
+      const editIcon = `<svg class="ui-icon icon-pencil" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+      const trashIcon = `<svg class="ui-icon icon-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
+
       const videoLinks = t.video_id
         ? `<div class="topic-links" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
              <a href="${urlFor("/ui/resumen/", resumenParams)}" class="topic-link" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#f0f5ff;border:1px solid #c9d5fa;border-radius:8px;font-size:13px;font-weight:700;color:var(--blue);text-decoration:none">
-               📖 Resumen didáctico ${t.summary_id ? '✓' : ''}
+               ${bookIcon} Resumen didáctico ${t.summary_id ? checkIcon : ''}
              </a>
              <a href="${urlFor("/ui/quiz/", quizParams)}" class="topic-link" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#f5f0ff;border:1px solid #d8c9fa;border-radius:8px;font-size:13px;font-weight:700;color:var(--violet);text-decoration:none">
-               ✍ Realizar evaluación ${quizId ? '✓' : ''}
+               ${editIcon} Realizar evaluación ${quizId ? checkIcon : ''}
              </a>
            </div>`
         : `<p class="topic-no-video" style="margin:10px 0 0;font-size:12px;color:var(--muted)">Sin video asignado</p>`;
 
       const deleteBtn = isAdmin
-        ? `<button class="topic-delete secondary" data-id="${t.id}" type="button" title="Eliminar tema" style="color:var(--red);border-color:#fca5a5;padding:4px 8px;font-size:12px">🗑 Eliminar</button>`
+        ? `<button class="topic-delete secondary btn-icon" data-id="${t.id}" type="button" title="Eliminar tema" style="color:var(--red);border-color:#fca5a5;padding:4px 8px;font-size:12px">${trashIcon} Eliminar</button>`
         : "";
 
       return `
@@ -373,11 +378,41 @@ async function loadGrades() {
   }
 }
 
+function getMemberGradeInfo(member, topicId) {
+  if (member.topic_grades && member.topic_grades[topicId]) {
+    return member.topic_grades[topicId];
+  }
+  if (member.topic_grades && member.topic_grades[String(topicId)]) {
+    return member.topic_grades[String(topicId)];
+  }
+  if (member.topics && Array.isArray(member.topics)) {
+    const found = member.topics.find((t) => t.topic_id === topicId);
+    if (found) {
+      return {
+        submitted: found.status === "evaluated",
+        attempts_count: found.attempts_count || found.total_attempts || 0,
+        raw_score: found.best_raw_score,
+        final_score: found.best_final_score !== null ? found.best_final_score : found.latest_final_score,
+        attempt_id: found.latest_attempt_id,
+        review_notes: found.review_notes,
+      };
+    }
+  }
+  return {
+    submitted: false,
+    attempts_count: 0,
+    raw_score: null,
+    final_score: null,
+    attempt_id: null,
+    review_notes: null,
+  };
+}
+
 function renderGrades(data) {
   const container = byId("grades-container");
   if (!container) return;
 
-  const topics = data.topics || [];
+  const topics = (data.topics && data.topics.length) ? data.topics : (cachedTopics || []);
   const members = data.members || [];
 
   if (!topics.length) {
@@ -398,9 +433,12 @@ function renderGrades(data) {
 
     const rows = members
       .map((m) => {
+        const mName = m.nombre || m.user_name || "Miembro";
+        const mEmail = m.email || m.user_email || "";
+
         const topicTds = topics
           .map((t) => {
-            const gradeInfo = m.topic_grades[t.id];
+            const gradeInfo = getMemberGradeInfo(m, t.id);
             if (!gradeInfo || !gradeInfo.submitted) {
               return `<td style="text-align:center;color:var(--muted)"><em>Pendiente</em></td>`;
             }
@@ -414,27 +452,27 @@ function renderGrades(data) {
                 <button type="button" class="secondary review-grade-btn" 
                         data-topic-id="${t.id}" 
                         data-topic-title="${escapeHtml(t.title)}"
-                        data-member-id="${m.user_id}"
-                        data-member-name="${escapeHtml(m.nombre)}"
+                        data-member-id="${m.user_id || m.id}"
+                        data-member-name="${escapeHtml(mName)}"
                         data-attempt-id="${gradeInfo.attempt_id}"
                         data-raw-score="${gradeInfo.raw_score ?? ''}"
                         data-final-score="${gradeInfo.final_score ?? ''}"
                         data-notes="${escapeHtml(gradeInfo.review_notes || '')}"
                         style="padding:4px 8px;font-size:12px;border-radius:6px;${badgeClass}">
-                  ${scoreDisplay} / 100 ${isReviewed ? '✎' : ''}
+                  ${scoreDisplay} / 100 ${isReviewed ? '<svg class="ui-icon" style="width:0.85em;height:0.85em" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 9.5-9.5z"/></svg>' : ''}
                 </button>
               </td>
             `;
           })
           .join("");
 
-        const avg = m.average_score !== null ? `${m.average_score.toFixed(1)} / 100` : "—";
+        const avg = m.average_score !== null && m.average_score !== undefined ? `${m.average_score.toFixed(1)} / 100` : "—";
 
         return `
           <tr>
             <td>
-              <strong>${escapeHtml(m.nombre)}</strong>
-              <span style="display:block;font-size:11px;color:var(--muted)">${escapeHtml(m.email)}</span>
+              <strong>${escapeHtml(mName)}</strong>
+              <span style="display:block;font-size:11px;color:var(--muted)">${escapeHtml(mEmail)}</span>
             </td>
             ${topicTds}
             <td style="text-align:center"><strong>${m.completed_topics}/${topics.length}</strong></td>
@@ -460,8 +498,8 @@ function renderGrades(data) {
           </tbody>
         </table>
       </div>
-      <p style="font-size:12px;color:var(--muted);margin-top:12px">
-        💡 <em>Haz clic en la calificación de un estudiante para abrir el modal de revisión y ajustar su nota final o dejar retroalimentación docente.</em>
+      <p style="font-size:12px;color:var(--muted);margin-top:12px;display:flex;align-items:center;gap:6px">
+        <svg class="ui-icon icon-tip" viewBox="0 0 24 24"><line x1="9" y1="18" x2="15" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5.76.76 1.23 1.52 1.41 2.5"/></svg> <em>Haz clic en la calificación de un estudiante para abrir el modal de revisión y ajustar su nota final o dejar retroalimentación docente.</em>
       </p>
     `;
 
@@ -490,12 +528,12 @@ function renderGrades(data) {
 
     const cards = topics
       .map((t) => {
-        const gradeInfo = mySummary.topic_grades[t.id];
+        const gradeInfo = getMemberGradeInfo(mySummary, t.id);
         const submitted = gradeInfo && gradeInfo.submitted;
-        const score = submitted ? (gradeInfo.final_score !== null ? gradeInfo.final_score.toFixed(1) : gradeInfo.raw_score.toFixed(1)) : null;
+        const score = submitted ? (gradeInfo.final_score !== null ? gradeInfo.final_score.toFixed(1) : (gradeInfo.raw_score !== null ? gradeInfo.raw_score.toFixed(1) : "—")) : null;
 
         const actionBtn = submitted
-          ? `<span style="font-size:12px;font-weight:700;color:#16a34a;background:#ecfaf5;padding:4px 10px;border-radius:99px">✓ Realizado (${gradeInfo.attempts_count} intento${gradeInfo.attempts_count > 1 ? 's' : ''})</span>`
+          ? `<span style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#16a34a;background:#ecfaf5;padding:4px 10px;border-radius:99px"><svg class="ui-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> Realizado (${gradeInfo.attempts_count} intento${gradeInfo.attempts_count > 1 ? 's' : ''})</span>`
           : `<a href="${urlFor('/ui/quiz/', { group: groupId, topic: t.id, video: t.video_id, material: t.quiz_id || t.material_id })}" class="primary-action" style="margin:0;padding:6px 14px;font-size:12px">Tomar cuestionario →</a>`;
 
         return `
@@ -519,7 +557,7 @@ function renderGrades(data) {
       })
       .join("");
 
-    const avg = mySummary.average_score !== null ? `${mySummary.average_score.toFixed(1)} / 100` : "Sin calificaciones aún";
+    const avg = mySummary.average_score !== null && mySummary.average_score !== undefined ? `${mySummary.average_score.toFixed(1)} / 100` : "Sin calificaciones aún";
 
     container.innerHTML = `
       <div style="background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
@@ -629,7 +667,7 @@ async function init() {
     if (main) {
       main.innerHTML = `
         <div style="max-width:550px;margin:40px auto;padding:28px;background:#fff;border:1px solid var(--line);border-radius:14px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.04)">
-          <div style="font-size:42px;margin-bottom:12px">🔒</div>
+          <div style="margin-bottom:12px"><svg class="ui-icon icon-lock access-restricted-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
           <h2 style="font-size:20px;margin:0 0 10px;color:var(--ink)">Acceso restringido a este grupo</h2>
           <p style="color:var(--muted);font-size:14px;line-height:1.5;margin-bottom:24px">
             ${escapeHtml(err.message || "Debes pertenecer al grupo para consultar sus actividades y materiales.")}
