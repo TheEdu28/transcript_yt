@@ -183,13 +183,12 @@ La respuesta conserva `evidence_timestamp`, indica si una opción fue correcta y
 
 La interfaz se divide en vistas independientes, servidas sin framework desde `/ui/`:
 
-1. `/ui/video/`: pega una URL pública de YouTube y espera a que la ingesta alcance `indexed`.
-2. `/ui/resumen/?video=42`: genera el resumen grounded de un video indexado.
-3. `/ui/quiz/?video=42`: configura niveles de Bloom, genera y responde un cuestionario.
-4. `/ui/material/?video=42&material=17`: carga, edita, restaura versiones y
-   exporta un material existente.
+1. `/ui/video/`: pega una URL pública de YouTube, observa el progreso en tiempo real y permite cancelar el trabajo con el botón "✕ Cancelar".
+2. `/ui/resumen/?video=42`: genera el resumen grounded de un video indexado, con selector de proveedor/modelo e indicador visual de cuota.
+3. `/ui/quiz/?video=42`: configura niveles de Bloom, genera y responde un cuestionario oficial o de práctica personal.
+4. `/ui/material/?video=42&material=17`: carga, edita, restaura versiones y exporta un material existente en PDF, Word, Markdown o JSON con o sin respuestas.
 
-`video` y `material` se conservan en los query params; por ello los enlaces se pueden recargar o compartir sin depender de variables globales de JavaScript. La interfaz no sustituye ninguna ruta de API: usa los mismos endpoints documentados, por lo que es útil tanto para la demostración de tesis como para verificar manualmente el flujo completo.
+`video` y `material` se conservan en los query params; por ello los enlaces se pueden recargar o compartir sin depender de variables globales de JavaScript. La interfaz no sustituye ninguna ruta de API: usa los mismos endpoints documentados, incluyendo `POST /api/v1/videos/{video_id}/cancel` para abortar ingestas y SQLite en modo WAL para concurrencia fluida sin bloqueos.
 
 ## Pruebas automatizadas
 

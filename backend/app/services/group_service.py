@@ -261,11 +261,12 @@ class GroupService:
         # 3. Materiales personales del alumno para este video
         personal_quiz = None
         personal_summary = None
+        personal_quizzes: list[Any] = []
         if topic.video_id:
             shared_quiz_id = shared_quiz.id if shared_quiz else None
             shared_summary_id = shared_summary.id if shared_summary else None
 
-            pq = (
+            pqs = (
                 session.query(DidacticMaterial)
                 .filter(
                     DidacticMaterial.video_id == topic.video_id,
@@ -274,10 +275,14 @@ class GroupService:
                     DidacticMaterial.id != shared_quiz_id,
                 )
                 .order_by(DidacticMaterial.id.desc())
-                .first()
+                .all()
             )
-            if pq:
-                personal_quiz = svc._as_response(session, pq.id, pq.video_id, pq.material_type, pq.content_json)
+            personal_quizzes = [
+                svc._as_response(session, m.id, m.video_id, m.material_type, m.content_json)
+                for m in pqs
+            ]
+            if personal_quizzes:
+                personal_quiz = personal_quizzes[0]
 
             ps = (
                 session.query(DidacticMaterial)
@@ -296,10 +301,13 @@ class GroupService:
         return TopicMaterialsResponse(
             topic_id=topic.id,
             video_id=topic.video_id,
+            title=topic.title,
+            is_admin=(current_user.id == group.admin_id),
             shared_quiz=shared_quiz,
             shared_summary=shared_summary,
             personal_quiz=personal_quiz,
             personal_summary=personal_summary,
+            personal_quizzes=personal_quizzes,
         )
 
     # -------------------------------------------------------------------------
@@ -314,6 +322,12 @@ class GroupService:
         payload: AttemptSubmitRequest,
     ) -> Attempt:
         """Evalúa un intento de tema con corrección determinista + IA grounded y persiste la nota con penalización."""
+        if user.id == group.admin_id:
+            raise PipelineError(
+                "El administrador del grupo no puede realizar ni calificar evaluaciones en su propio grupo.",
+                code="ADMIN_CANNOT_SUBMIT_ATTEMPT",
+                status_code=400,
+            )
         topic = self.repository.get_topic(session, topic_id)
         if not topic or topic.group_id != group.id:
             raise PipelineError("El tema no existe en este grupo.", code="TOPIC_NOT_FOUND", status_code=404)

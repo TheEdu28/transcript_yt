@@ -53,10 +53,10 @@ def test_parse_grounded_summary_rejects_unknown_timestamp() -> None:
     assert error.value.code == "UNGROUNDED_TIMESTAMP"
 
 
-def test_parse_grounded_summary_rejects_synopsis_over_200_words() -> None:
-    """HU-03 enforces the short synopsis limit after Gemini responds."""
+def test_parse_grounded_summary_rejects_synopsis_over_500_words() -> None:
+    """HU-03 enforces the synopsis limit after Gemini responds."""
     payload = json.loads(summary_payload())
-    payload["synopsis"] = "x " * 201
+    payload["synopsis"] = "x " * 501
     with pytest.raises(PipelineError) as error:
         parse_grounded_summary(json.dumps(payload), EVIDENCE)
     assert error.value.code == "SUMMARY_LENGTH_EXCEEDED"

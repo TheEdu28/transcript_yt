@@ -60,43 +60,6 @@
             </button>
           </div>
 
-          <!-- Formulario desplegable para crear tema (solo admin) -->
-          <form id="topic-form" class="topic-create-form stack" style="display:none;padding:18px;border:1px solid #c9d5fa;border-radius:12px;background:#fff;margin-bottom:20px">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <strong style="font-size:14px;color:var(--blue)">Crear nuevo tema</strong>
-              <button id="cancel-topic-btn" type="button" class="secondary btn-icon" style="padding:3px 10px;font-size:12px"><svg class="ui-icon icon-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancelar</button>
-            </div>
-
-            <label>Título del tema
-              <input id="topic-title" type="text" required placeholder="Ej: Fotosíntesis y Cloroplastos">
-            </label>
-            <label>Descripción (opcional)
-              <input id="topic-desc" type="text" placeholder="Breve orientación sobre el tema evaluado">
-            </label>
-
-            <!-- Selector visual de video -->
-            <div>
-              <label style="font-weight:700;font-size:13px;margin-bottom:6px;display:block">Video asociado:</label>
-              <input id="topic-video" type="hidden" value="">
-
-              <div id="selected-video-preview" style="display:none;margin-bottom:10px"></div>
-
-              <button type="button" id="toggle-video-picker-btn" class="secondary btn-icon" style="font-size:13px;padding:6px 14px">
-                    <svg class="ui-icon icon-video" aria-hidden="true" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> Seleccionar de mis videos procesados <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24" style="width:0.8em;height:0.8em"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-
-              <div id="video-picker-container" class="video-picker-container" style="display:none;margin-top:10px">
-                <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Elige un video de tu historial para vincularlo a este tema:</p>
-                <div id="video-picker-grid" class="video-picker-grid">Cargando tus videos…</div>
-              </div>
-            </div>
-
-            <div style="display:flex;gap:10px;margin-top:8px">
-              <button id="topic-btn" type="submit" style="flex:1">Publicar tema en el grupo →</button>
-              <button id="cancel-topic-btn-2" type="button" class="secondary">Cancelar</button>
-            </div>
-          </form>
-
           <!-- Centro: Lista de temas -->
           <div id="topics-list" class="topics-list empty-state">Cargando temas…</div>
         </div>
@@ -145,6 +108,67 @@
       </div>
     </div>
   </section>
+
+  <!-- Modal Pop-up para Crear Nuevo Tema -->
+  <div id="topic-modal" class="modal-backdrop" style="display:none">
+    <div class="modal" style="max-width:580px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="margin:0;font-size:18px;color:var(--ink)">Crear nuevo tema</h3>
+        <button id="cancel-topic-btn" type="button" class="secondary btn-icon" style="padding:4px 8px;font-size:12px" title="Cerrar"><svg class="ui-icon icon-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 16px">Define el título, descripción orientativa y asocia un video educativo para publicar la actividad en el grupo.</p>
+
+      <form id="topic-form" class="stack">
+        <label>Título del tema
+          <input id="topic-title" type="text" required placeholder="Ej: Fotosíntesis y Cloroplastos">
+        </label>
+        <label>Descripción (opcional)
+          <input id="topic-desc" type="text" placeholder="Breve orientación sobre el tema evaluado">
+        </label>
+
+        <!-- Selector visual de video -->
+        <div>
+          <label style="font-weight:700;font-size:13px;margin-bottom:6px;display:block">Video asociado:</label>
+          <input id="topic-video" type="hidden" value="">
+
+          <div id="selected-video-preview" style="display:none;margin-bottom:10px"></div>
+
+          <button type="button" id="toggle-video-picker-btn" class="secondary btn-icon" style="font-size:13px;padding:6px 14px">
+            <svg class="ui-icon icon-video" aria-hidden="true" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg> Seleccionar de mis videos procesados <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24" style="width:0.8em;height:0.8em"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+
+          <div id="video-picker-container" class="video-picker-container" style="display:none;margin-top:10px">
+            <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Elige un video de tu historial para vincularlo a este tema:</p>
+            <div id="video-picker-grid" class="video-picker-grid">Cargando tus videos…</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
+          <button id="cancel-topic-btn-2" type="button" class="secondary">Cancelar</button>
+          <button id="topic-btn" type="submit">Publicar tema en el grupo →</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Pop-up para Confirmar Eliminación de Tema -->
+  <div id="delete-topic-modal" class="modal-backdrop" style="display:none">
+    <div class="modal" style="max-width:440px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="width:36px;height:36px;border-radius:50%;background:#fee2e2;display:grid;place-items:center;color:var(--red);flex-shrink:0">
+          <svg class="ui-icon" style="width:20px;height:20px" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        </div>
+        <h3 style="margin:0;font-size:18px;color:var(--ink)">Eliminar tema</h3>
+      </div>
+      <p id="delete-topic-msg" style="font-size:13px;color:var(--muted);line-height:1.5;margin:0 0 18px">
+        ¿Estás seguro de que deseas eliminar este tema? Se perderán las referencias a actividades e intentos asociados de los alumnos.
+      </p>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button type="button" id="delete-topic-cancel-btn" class="secondary">Cancelar</button>
+        <button type="button" id="delete-topic-confirm-btn" style="background:var(--red);color:#fff">Eliminar tema</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Modal de Revisión Manual de Calificación -->
   <div id="grade-review-modal" class="modal-backdrop" style="display:none">

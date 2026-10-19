@@ -46,12 +46,41 @@
     </div>
   </section>
 
-  <!-- Configurar cuestionario -->
-  <section class="panel">
-    <div class="panel-heading">
-      <p class="number">03</p>
-      <h2>Configurar cuestionario</h2>
+  <!-- Selector de modo / Pestañas de Cuestionario (cuando proviene de un tema) -->
+  <nav id="quiz-mode-nav" class="group-tabs" role="tablist" style="display:none;margin-bottom:18px;border-bottom:2px solid var(--line);padding-bottom:0">
+    <button type="button" class="group-tab-btn active" id="tab-btn-shared" data-mode="shared" style="border-radius:8px 8px 0 0;padding:10px 18px;background:none;border:none;color:var(--ink);font-weight:700;border-bottom:3px solid var(--blue);cursor:pointer">
+      Cuestionario del profesor
+    </button>
+    <button type="button" class="group-tab-btn" id="tab-btn-personal" data-mode="personal" style="border-radius:8px 8px 0 0;padding:10px 18px;background:none;border:none;color:var(--muted);font-weight:700;border-bottom:3px solid transparent;cursor:pointer">
+      Mis cuestionarios propios
+    </button>
+  </nav>
+
+  <!-- Barra de control de cuestionarios propios (solo en pestaña de cuestionarios personales) -->
+  <div id="personal-quiz-bar" style="display:none;margin-bottom:16px;background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:14px 18px;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:13px;font-weight:700;color:var(--ink)">Cuestionarios creados por ti:</span>
+      <select id="personal-quiz-select" style="padding:6px 10px;font-size:13px;border-radius:8px;border:1px solid #cfd8e7;background:#fff"></select>
     </div>
+    <button type="button" id="toggle-configure-quiz-btn" class="primary-action" style="margin:0;padding:8px 16px;font-size:13px">
+      + Crear cuestionario propio
+    </button>
+  </div>
+
+  <!-- Configurar cuestionario (solo se muestra cuando se quiere crear uno propio) -->
+  <section class="panel" id="config-panel" style="display:none;margin-bottom:18px">
+    <div class="panel-heading" style="justify-content:space-between;align-items:center">
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <p class="number" id="config-step-number">03</p>
+        <h2 id="config-panel-title">Configurar cuestionario propio</h2>
+      </div>
+      <button type="button" id="close-config-panel-btn" class="secondary btn-icon" style="padding:4px 10px;font-size:12px;display:none">
+        <svg class="ui-icon icon-close" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg> Cancelar
+      </button>
+    </div>
+    <p id="config-panel-desc" style="font-size:13px;color:var(--muted);margin:0 0 14px">
+      Personaliza los niveles cognitivos de Bloom y la cantidad de preguntas para generar tu cuestionario personal.
+    </p>
     <fieldset class="bloom-fieldset">
       <legend>Niveles de Bloom</legend>
       <div class="bloom-options">
@@ -72,22 +101,32 @@
       </label>
     </div>
     <div id="model-selector-container"></div>
-    <button id="generate-button" type="button">Generar cuestionario</button>
+    <div style="margin-top:12px">
+      <button id="generate-button" type="button">Generar cuestionario</button>
+    </div>
   </section>
 
   <!-- Responder cuestionario -->
   <section class="panel output-panel">
     <div class="panel-heading">
-      <p class="number">04</p>
-      <h2>Responde</h2>
+      <p class="number" id="output-step-number">03</p>
+      <h2 id="output-panel-title">Cuestionario</h2>
     </div>
 
     <!-- Acciones de exportación -->
-    <div id="quiz-export-actions" class="export-group" style="display:none;margin-bottom:14px">
-      <span style="font-size:13px;font-weight:700;color:#475569">Exportar cuestionario:</span>
-      <button id="quiz-export-md" type="button" class="export-btn export-btn--md" title="Descargar como Markdown"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Markdown</button>
-      <button id="quiz-export-pdf" type="button" class="export-btn export-btn--pdf" title="Descargar como PDF"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13v4"/><path d="M9 13h2a1.5 1.5 0 0 1 0 3H9"/></svg> PDF</button>
-      <button id="quiz-export-docx" type="button" class="export-btn export-btn--docx" title="Descargar como Word (.docx)"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="8 13 9.5 17 11 13 12.5 17 14 13"/></svg> Word (.docx)</button>
+    <div id="quiz-export-actions" class="export-group" style="display:none;margin-bottom:16px;background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 16px;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:700;color:#334155">Contenido de exportación:</span>
+        <select id="export-mode-select" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;font-weight:600">
+          <option value="false" selected>Solo preguntas (sin contestar / sin respuestas)</option>
+          <option value="true">Preguntas y respuestas</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="quiz-export-md" type="button" class="export-btn export-btn--md" title="Descargar como Markdown"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Markdown</button>
+        <button id="quiz-export-pdf" type="button" class="export-btn export-btn--pdf" title="Descargar como PDF"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13v4"/><path d="M9 13h2a1.5 1.5 0 0 1 0 3H9"/></svg> PDF</button>
+        <button id="quiz-export-docx" type="button" class="export-btn export-btn--docx" title="Descargar como Word (.docx)"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="8 13 9.5 17 11 13 12.5 17 14 13"/></svg> Word (.docx)</button>
+      </div>
     </div>
 
     <form id="quiz-output" class="empty-state">Genera o abre un cuestionario para responderlo aquí.</form>

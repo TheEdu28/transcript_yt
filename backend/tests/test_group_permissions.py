@@ -543,5 +543,52 @@ def test_get_group_grades_and_manual_review(client: TestClient) -> None:
     assert stud_entry_rev["topics"][0]["best_final_score"] == 95.0
 
 
+def test_admin_cannot_submit_attempt_and_topic_materials_separation(client: TestClient) -> None:
+    """Verifica que el admin no pueda autocalificarse y que los cuestionarios personales estén separados."""
+    suffix = uuid.uuid4().hex[:6]
+    admin_id, admin_token = register_and_login(client, f"prof_{suffix}@test.com", "Profesor")
+    stud_id, stud_token = register_and_login(client, f"stud_{suffix}@test.com", "Estudiante")
+
+    grp = client.post("/api/v1/groups", json={"name": "Biología"}, headers=auth_header(admin_token)).json()
+    group_id = grp["id"]
+    client.post("/api/v1/groups/join", json={"code": grp["code"]}, headers=auth_header(stud_token))
+
+    video_id, mat_id = create_dummy_video_and_quiz(admin_id)
+    top = client.post(
+        f"/api/v1/groups/{group_id}/topics",
+        json={"title": "Genética", "video_id": video_id, "material_id": mat_id},
+        headers=auth_header(admin_token),
+    ).json()
+    topic_id = top["id"]
+
+    # 1. El administrador NO puede enviar un intento para evaluarse a sí mismo (debe dar 400)
+    admin_att = client.post(
+        f"/api/v1/groups/{group_id}/topics/{topic_id}/attempts",
+        json={"multiple_choice_answers": [{"question_index": 0, "selected_option": 2}]},
+        headers=auth_header(admin_token),
+    )
+    assert admin_att.status_code == 400
+    assert "no puede realizar" in admin_att.json()["detail"]["message"]
+
+    # 2. Topic materials para el admin: is_admin = True, shared_quiz presente
+    mats_admin = client.get(
+        f"/api/v1/groups/{group_id}/topics/{topic_id}/materials",
+        headers=auth_header(admin_token),
+    ).json()
+    assert mats_admin["is_admin"] is True
+    assert mats_admin["shared_quiz"]["id"] == mat_id
+    assert mats_admin["title"] == "Genética"
+
+    # 3. Topic materials para el estudiante: is_admin = False, shared_quiz presente
+    mats_stud = client.get(
+        f"/api/v1/groups/{group_id}/topics/{topic_id}/materials",
+        headers=auth_header(stud_token),
+    ).json()
+    assert mats_stud["is_admin"] is False
+    assert mats_stud["shared_quiz"]["id"] == mat_id
+    assert mats_stud["personal_quizzes"] == []
+
+
+
 
 

@@ -79,7 +79,9 @@ def normalize_json_response(raw_response: str) -> str:
     return "\n".join(lines).strip()
 
 
-def parse_grounded_summary(raw_response: str, evidence: list[dict[str, Any]]) -> SummaryResponse:
+def parse_grounded_summary(
+    raw_response: str, evidence: list[dict[str, Any]], max_words: int = 500,
+) -> SummaryResponse:
     """Parse Gemini JSON and reject summaries that cite timestamps not retrieved by RAG."""
     try:
         result = SummaryResponse.model_validate_json(normalize_json_response(raw_response))
@@ -94,9 +96,9 @@ def parse_grounded_summary(raw_response: str, evidence: list[dict[str, Any]]) ->
             status_code=502,
         ) from error
 
-    if len(result.synopsis.split()) > 200:
+    if len(result.synopsis.split()) > max_words:
         raise PipelineError(
-            "Gemini excedió el límite de 200 palabras.",
+            f"Gemini excedió el límite de {max_words} palabras.",
             code="SUMMARY_LENGTH_EXCEEDED",
             status_code=502,
         )
@@ -235,6 +237,9 @@ class PipelineService:
         video_info = self.youtube.inspect(url, self.settings)
         existing = self.repository.get_by_youtube_id(session, video_info.youtube_id)
         if existing and existing.status == "indexed":
+            if owner_id is not None and existing.owner_id is None:
+                existing.owner_id = owner_id
+                session.commit()
             return {
                 "video_id": existing.id,
                 "status": existing.status,
@@ -291,6 +296,8 @@ class PipelineService:
         video = self.repository.get(session, video_id)
         if not video:
             raise PipelineError("El video no existe.", code="VIDEO_NOT_FOUND", status_code=404)
+        if getattr(video, "progress_stage", None) == "cancelled" or video.status == "failed":
+            return {"video_id": video.id, "status": "failed", "progress_stage": "cancelled", "progress_percent": 0}
         started = time.perf_counter()
         video_info = VideoInfo(
             video.youtube_id, video.source_url, video.title, video.duration_seconds, video.language
@@ -305,11 +312,45 @@ class PipelineService:
                 except Exception:
                     segments = None
 
+            if getattr(session, "refresh", None):
+                try:
+                    session.refresh(video)
+                except Exception:
+                    pass
+            if getattr(video, "progress_stage", None) == "cancelled":
+                return {"video_id": video.id, "status": "failed", "progress_stage": "cancelled", "progress_percent": 0}
+
             if not segments:
                 self.repository.update_progress(session, video, "downloading_audio", 15)
                 audio_path = self.youtube.download_audio(video_info, self.settings)
+                if getattr(session, "refresh", None):
+                    try:
+                        session.refresh(video)
+                    except Exception:
+                        pass
+                if getattr(video, "progress_stage", None) == "cancelled":
+                    try:
+                        if audio_path and hasattr(audio_path, "exists") and audio_path.exists():
+                            audio_path.unlink()
+                    except OSError:
+                        pass
+                    return {"video_id": video.id, "status": "failed", "progress_stage": "cancelled", "progress_percent": 0}
+
                 self.repository.update_progress(session, video, "transcribing", 35)
                 segments = self.whisper.transcribe(audio_path, video_info.language, self.settings)
+                try:
+                    if audio_path and hasattr(audio_path, "exists") and audio_path.exists():
+                        audio_path.unlink()
+                except OSError:
+                    pass
+
+            if getattr(session, "refresh", None):
+                try:
+                    session.refresh(video)
+                except Exception:
+                    pass
+            if getattr(video, "progress_stage", None) == "cancelled":
+                return {"video_id": video.id, "status": "failed", "progress_stage": "cancelled", "progress_percent": 0}
             transcript_path.write_text(
                 json.dumps([asdict(s) for s in segments], ensure_ascii=False, indent=2),
                 encoding="utf-8",
@@ -344,9 +385,12 @@ class PipelineService:
     ) -> SummaryResponse:
         self._assert_indexed(video_id, session)
         evidence = self.vectors.retrieve(video_id, focus)
-        prompt = """Genera el resumen didáctico solicitado a partir de la evidencia. La sinopsis debe
-tener menos de 200 palabras. Los timestamps deben tener el formato HH:MM:SS y coincidir exactamente
-con los límites de tiempo presentes en la evidencia recuperada."""
+        max_words = getattr(self.settings, "max_summary_words", 500)
+        prompt = f"""Genera un resumen didáctico exhaustivo, estructurado y de alta calidad pedagógica a partir de la evidencia:
+1. Sinopsis: Explica de forma completa y profunda la temática central y el desarrollo conceptual del video (entre 250 y 450 palabras, máximo {max_words} palabras).
+2. Glosario: Extrae entre 5 y 10 conceptos o términos clave esenciales con definiciones contextualizadas claras y su timestamp exacto de respaldo.
+3. Bloques didácticos: Organiza el contenido en 3 a 6 secciones temáticas con explicaciones sustanciales y sus respectivos timestamps.
+Todos los timestamps deben tener el formato HH:MM:SS y coincidir exactamente con los límites de tiempo presentes en la evidencia recuperada."""
         raw_response = GeminiService(self.settings, provider_name=model_provider, model_id=model_id).generate_json(
             prompt, evidence, response_schema=SummaryResponse,
         )
@@ -356,7 +400,7 @@ con los límites de tiempo presentes en la evidencia recuperada."""
             session,
             video_id,
             "summary",
-            parse_grounded_summary(raw_response, evidence),
+            parse_grounded_summary(raw_response, evidence, max_words=max_words),
             owner_id=effective_owner,
         )
 

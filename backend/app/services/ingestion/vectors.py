@@ -90,6 +90,7 @@ class VectorStoreService:
                 "end": metadata.get("end"),
                 "distance": distance,
             })
+        records.sort(key=lambda r: (r.get("chunk_index") if r.get("chunk_index") is not None else 0))
         return records
 
     def delete_by_video(self, video_id: int) -> None:

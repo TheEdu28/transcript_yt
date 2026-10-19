@@ -113,7 +113,7 @@ class DidacticBlock(BaseModel):
 
 class SummaryResponse(BaseModel):
     material_id: int | None = None
-    synopsis: str = Field(max_length=1400)
+    synopsis: str = Field(max_length=4000)
     glossary: list[GlossaryItem]
     didactic_blocks: list[DidacticBlock]
     evidence_sufficient: bool
@@ -436,10 +436,13 @@ class TopicMaterialsResponse(BaseModel):
 
     topic_id: int
     video_id: int | None = None
+    title: str | None = None
+    is_admin: bool = False
     shared_quiz: MaterialResponse | None = None
     shared_summary: MaterialResponse | None = None
     personal_quiz: MaterialResponse | None = None
     personal_summary: MaterialResponse | None = None
+    personal_quizzes: list[MaterialResponse] = Field(default_factory=list)
 
 
 class AttemptGradeUpdate(BaseModel):

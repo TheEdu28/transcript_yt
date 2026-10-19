@@ -15,24 +15,33 @@ class ExportService:
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
-    def export(self, material: MaterialResponse, target_format: str) -> Path:
+    def export(self, material: MaterialResponse, target_format: str, include_answers: bool = False) -> Path:
         """Write an export under the configured local data directory."""
+        suffix_extra = "_con_respuestas" if include_answers else ""
         if target_format == "json":
-            body, suffix = json.dumps(material.model_dump(mode="json"), ensure_ascii=False, indent=2), "json"
+            dumped = material.model_dump(mode="json")
+            if not include_answers and material.material_type == "quiz":
+                content = dumped.get("content", {})
+                for q in content.get("multiple_choice", []):
+                    q.pop("correct_option", None)
+                    q.pop("explanation", None)
+                for q in content.get("open_questions", []):
+                    q.pop("expected_points", None)
+            body, suffix = json.dumps(dumped, ensure_ascii=False, indent=2), "json"
         elif target_format == "markdown":
-            body, suffix = self._as_markdown(material), "md"
+            body, suffix = self._as_markdown(material, include_answers=include_answers), "md"
         elif target_format == "docx":
-            return self.export_to_docx(material)
+            return self.export_to_docx(material, include_answers=include_answers)
         elif target_format == "pdf":
-            return self.export_to_pdf(material)
+            return self.export_to_pdf(material, include_answers=include_answers)
         else:
             raise PipelineError("El formato de exportación no es compatible.", code="UNSUPPORTED_EXPORT_FORMAT")
         self.settings.export_directory.mkdir(parents=True, exist_ok=True)
-        path = self.settings.export_directory / f"material_{material.id}.{suffix}"
+        path = self.settings.export_directory / f"material_{material.id}{suffix_extra}.{suffix}"
         path.write_text(body, encoding="utf-8")
         return path
 
-    def export_to_docx(self, material: MaterialResponse) -> Path:
+    def export_to_docx(self, material: MaterialResponse, include_answers: bool = False) -> Path:
         """Write a readable DOCX document from the validated material JSON."""
         try:
             from docx import Document
@@ -41,7 +50,8 @@ class ExportService:
 
         document = Document()
         content = material.content
-        document.add_heading(self._title(material), level=0)
+        title_suffix = " (Con respuestas)" if include_answers and material.material_type == "quiz" else ""
+        document.add_heading(self._title(material) + title_suffix, level=0)
         document.add_paragraph(f"Video: {material.video_id}")
 
         if material.material_type == "summary":
@@ -63,14 +73,15 @@ class ExportService:
                 document.add_paragraph(str(block["explanation"]))
                 document.add_paragraph(f"Timestamps: {', '.join(block['timestamps'])}")
         else:
-            self._add_quiz_docx(document, content)
+            self._add_quiz_docx(document, content, include_answers=include_answers)
 
         self.settings.export_directory.mkdir(parents=True, exist_ok=True)
-        path = self.settings.export_directory / f"material_{material.id}.docx"
+        suffix_extra = "_con_respuestas" if include_answers else ""
+        path = self.settings.export_directory / f"material_{material.id}{suffix_extra}.docx"
         document.save(path)
         return path
 
-    def export_to_pdf(self, material: MaterialResponse) -> Path:
+    def export_to_pdf(self, material: MaterialResponse, include_answers: bool = False) -> Path:
         """Write a readable PDF document from the validated material JSON."""
         try:
             from reportlab.lib import colors
@@ -85,7 +96,8 @@ class ExportService:
         body = styles["BodyText"]
         heading = styles["Heading1"]
         subheading = styles["Heading2"]
-        story = [Paragraph(escape(self._title(material)), styles["Title"]), Paragraph(f"Video: {material.video_id}", body), Spacer(1, 12)]
+        title_suffix = " (Con respuestas)" if include_answers and material.material_type == "quiz" else ""
+        story = [Paragraph(escape(self._title(material) + title_suffix), styles["Title"]), Paragraph(f"Video: {material.video_id}", body), Spacer(1, 12)]
         content = material.content
 
         if material.material_type == "summary":
@@ -114,10 +126,11 @@ class ExportService:
                     Spacer(1, 8),
                 ])
         else:
-            self._add_quiz_pdf(story, content, heading, subheading, body, Paragraph, Spacer)
+            self._add_quiz_pdf(story, content, heading, subheading, body, Paragraph, Spacer, include_answers=include_answers)
 
         self.settings.export_directory.mkdir(parents=True, exist_ok=True)
-        path = self.settings.export_directory / f"material_{material.id}.pdf"
+        suffix_extra = "_con_respuestas" if include_answers else ""
+        path = self.settings.export_directory / f"material_{material.id}{suffix_extra}.pdf"
         SimpleDocTemplate(str(path), pagesize=letter, rightMargin=0.6 * inch, leftMargin=0.6 * inch).build(story)
         return path
 
@@ -126,42 +139,77 @@ class ExportService:
         return f"Material didáctico {material.id} · {'Resumen' if material.material_type == 'summary' else 'Cuestionario'}"
 
     @staticmethod
-    def _add_quiz_docx(document: object, content: dict) -> None:
+    def _add_quiz_docx(document: object, content: dict, include_answers: bool = False) -> None:
         document.add_heading("Cuestionario", level=1)
-        for index, question in enumerate(content["multiple_choice"], start=1):
+        for index, question in enumerate(content.get("multiple_choice", []), start=1):
             document.add_heading(f"{index}. {question['question']}", level=2)
-            for option in question["options"]:
-                document.add_paragraph(str(option), style="List Bullet")
-            document.add_paragraph(f"Evidencia: {question['evidence_timestamp']}")
-        document.add_heading("Preguntas abiertas", level=1)
-        for index, question in enumerate(content["open_questions"], start=1):
-            document.add_heading(f"{index}. {question['question']}", level=2)
-            document.add_paragraph(f"Puntos esperados: {', '.join(question['expected_points'])}")
-            document.add_paragraph(f"Evidencia: {question['evidence_timestamp']}")
+            for opt_idx, option in enumerate(question.get("options", [])):
+                letter = chr(65 + opt_idx)
+                document.add_paragraph(f"{letter}) {option}", style="List Bullet")
+            document.add_paragraph(f"Evidencia: {question.get('evidence_timestamp', '')}")
+            if include_answers:
+                correct_idx = question.get("correct_option", 0)
+                options = question.get("options", [])
+                correct_val = options[correct_idx] if 0 <= correct_idx < len(options) else ""
+                correct_letter = chr(65 + correct_idx) if 0 <= correct_idx < len(options) else ""
+                document.add_paragraph(f"Respuesta correcta: {correct_letter}) {correct_val}")
+                if question.get("explanation"):
+                    document.add_paragraph(f"Explicación: {question['explanation']}")
+
+        open_questions = content.get("open_questions", [])
+        if open_questions:
+            document.add_heading("Preguntas abiertas", level=1)
+            for index, question in enumerate(open_questions, start=1):
+                document.add_heading(f"{index}. {question['question']}", level=2)
+                document.add_paragraph(f"Evidencia: {question.get('evidence_timestamp', '')}")
+                if include_answers:
+                    expected = question.get("expected_points", [])
+                    document.add_paragraph(f"Puntos esperados: {', '.join(expected)}")
+                else:
+                    document.add_paragraph("Respuesta:")
+                    document.add_paragraph("")
 
     @staticmethod
-    def _add_quiz_pdf(story: list, content: dict, heading: object, subheading: object, body: object, paragraph: object, spacer: object) -> None:
+    def _add_quiz_pdf(story: list, content: dict, heading: object, subheading: object, body: object, paragraph: object, spacer: object, include_answers: bool = False) -> None:
         story.append(paragraph("Cuestionario", heading))
         for index, question in enumerate(content.get("multiple_choice", []), start=1):
             story.append(paragraph(f"{index}. {escape(str(question['question']))}", subheading))
-            story.extend(paragraph(f"• {escape(str(option))}", body) for option in question.get("options", []))
-            story.extend([paragraph(f"Evidencia: {escape(str(question['evidence_timestamp']))}", body), spacer(1, 8)])
+            for opt_idx, option in enumerate(question.get("options", [])):
+                letter = chr(65 + opt_idx)
+                story.append(paragraph(f"• {letter}) {escape(str(option))}", body))
+            story.append(paragraph(f"Evidencia: {escape(str(question.get('evidence_timestamp', '')))}", body))
+            if include_answers:
+                correct_idx = question.get("correct_option", 0)
+                options = question.get("options", [])
+                correct_val = options[correct_idx] if 0 <= correct_idx < len(options) else ""
+                correct_letter = chr(65 + correct_idx) if 0 <= correct_idx < len(options) else ""
+                story.append(paragraph(f"<b>Respuesta correcta:</b> {correct_letter}) {escape(str(correct_val))}", body))
+                if question.get("explanation"):
+                    story.append(paragraph(f"<b>Explicación:</b> {escape(str(question['explanation']))}", body))
+            story.append(spacer(1, 8))
+
         open_questions = content.get("open_questions", [])
         if open_questions:
             story.append(paragraph("Preguntas abiertas", heading))
             for index, question in enumerate(open_questions, start=1):
                 story.extend([
                     paragraph(f"{index}. {escape(str(question['question']))}", subheading),
-                    paragraph(f"Puntos esperados: {escape(', '.join(question.get('expected_points', [])))}", body),
-                    paragraph(f"Evidencia: {escape(str(question['evidence_timestamp']))}", body),
-                    spacer(1, 8),
+                    paragraph(f"Evidencia: {escape(str(question.get('evidence_timestamp', '')))}", body),
                 ])
+                if include_answers:
+                    expected = question.get("expected_points", [])
+                    story.append(paragraph(f"<b>Puntos esperados:</b> {escape(', '.join(expected))}", body))
+                else:
+                    story.append(paragraph("<i>Espacio para responder:</i>", body))
+                    story.append(spacer(1, 20))
+                story.append(spacer(1, 8))
 
     @staticmethod
-    def _as_markdown(material: MaterialResponse) -> str:
+    def _as_markdown(material: MaterialResponse, include_answers: bool = False) -> str:
         """Render both supported resource types in a readable portable representation."""
         content = material.content
-        lines = [f"# Material {material.id}", "", f"Video: {material.video_id}", ""]
+        title_suffix = " (Con respuestas)" if include_answers and material.material_type == "quiz" else ""
+        lines = [f"# Material {material.id}{title_suffix}", "", f"Video: {material.video_id}", ""]
         if material.material_type == "summary":
             lines.extend(["## Sinopsis", "", str(content["synopsis"]), "", "## Glosario", ""])
             lines.extend(f"- **{item['term']}** ({item['timestamp']}): {item['definition']}" for item in content["glossary"])
@@ -170,11 +218,29 @@ class ExportService:
                 lines.extend([f"### {block['title']}", "", str(block["explanation"]), "", f"Timestamps: {', '.join(block['timestamps'])}", ""])
         else:
             lines.extend(["## Cuestionario", ""])
-            for index, question in enumerate(content["multiple_choice"], start=1):
+            for index, question in enumerate(content.get("multiple_choice", []), start=1):
                 lines.extend([f"### {index}. {question['question']}", ""])
-                lines.extend(f"- {option}" for option in question["options"])
-                lines.extend(["", f"Evidencia: {question['evidence_timestamp']}", ""])
-            lines.extend(["## Preguntas abiertas", ""])
-            for index, question in enumerate(content["open_questions"], start=1):
-                lines.extend([f"### {index}. {question['question']}", "", f"Evidencia: {question['evidence_timestamp']}", ""])
+                for opt_idx, option in enumerate(question.get("options", [])):
+                    letter = chr(65 + opt_idx)
+                    lines.append(f"- {letter}) {option}")
+                lines.append(f"\nEvidencia: {question.get('evidence_timestamp', '')}")
+                if include_answers:
+                    correct_idx = question.get("correct_option", 0)
+                    options = question.get("options", [])
+                    correct_val = options[correct_idx] if 0 <= correct_idx < len(options) else ""
+                    correct_letter = chr(65 + correct_idx) if 0 <= correct_idx < len(options) else ""
+                    lines.append(f"**Respuesta correcta:** {correct_letter}) {correct_val}")
+                    if question.get("explanation"):
+                        lines.append(f"**Explicación:** {question['explanation']}")
+                lines.append("")
+
+            open_questions = content.get("open_questions", [])
+            if open_questions:
+                lines.extend(["## Preguntas abiertas", ""])
+                for index, question in enumerate(open_questions, start=1):
+                    lines.extend([f"### {index}. {question['question']}", "", f"Evidencia: {question.get('evidence_timestamp', '')}", ""])
+                    if include_answers:
+                        expected = question.get("expected_points", [])
+                        if expected:
+                            lines.extend([f"**Puntos esperados:** {', '.join(expected)}", ""])
         return "\n".join(lines).rstrip() + "\n"

@@ -1,61 +1,131 @@
-# Material didáctico desde videos de YouTube
+# transcript_yt
 
-Prototipo académico que transforma videos educativos de YouTube en material didáctico estructurado. Su pipeline previsto integra ingesta, Whisper local, embeddings con ChromaDB local y generación anclada al contenido mediante Gemini.
+Prototipo de tesis de Ingeniería de Software orientado a transformar videos educativos de YouTube en material didáctico estructurado.
 
-## Alcance actual
+## Objetivo
+Facilitar el estudio de contenidos audiovisuales mediante la generación de recursos de repaso.
 
-El backend funcional vive en `backend/`. Los Sprints 1 y 2 implementan la ingesta de videos públicos de YouTube con idioma español o inglés y duración máxima de 60 minutos, además del resumen RAG en `POST /api/v1/materials/summary`. El Sprint 3 incorpora el cuestionario de autoevaluación en `POST /api/v1/materials/quiz`. El Sprint 4 añade ingesta asíncrona con progreso, edición persistida y exportación local de materiales. El Sprint 5 completa la selección de niveles de Bloom y la retroalimentación interactiva.
+## Resultados generados
+- Resúmenes.
+- Glosarios.
+- Cuestionarios.
 
-El resumen recupera únicamente chunks indexados en ChromaDB, limita el contexto enviado a Gemini y valida que cada timestamp del glosario y de los bloques didácticos exista en la evidencia recuperada. Gemini recibe el esquema Pydantic de la salida para forzar un JSON estructurado. La salida permite hasta 4096 tokens para completar el recurso, mientras la entrada permanece limitada a 12000 caracteres. Si Gemini devuelve JSON inválido, excede 200 palabras o cita un timestamp no recuperado, la API rechaza la respuesta. Los fallos temporales de Gemini se reintentan una vez y después se devuelven como `503`.
+### Detalle de recursos implementados
+- **Resúmenes:** Sinopsis general concisa y bloques didácticos estructurados con explicaciones detalladas y marcas de tiempo (*timestamps*) verificadas que respaldan la evidencia en el video.
+- **Glosarios:** Lista de términos y conceptos clave extraídos del video, acompañados de su definición contextual y el *timestamp* exacto donde se explican en el contenido audiovisual.
+- **Cuestionarios:**
+  - Preguntas de opción múltiple con 4 alternativas y justificación de respuesta correcta fundamentada en marcas temporales de la transcripción.
+  - Preguntas abiertas orientadas a la comprensión y análisis con puntos clave esperados de evaluación.
+  - Configuración pedagógica por niveles cognitivos de la Taxonomía de Bloom (*recordar, comprender, aplicar, analizar, evaluar, crear*).
+  - Separación funcional entre el cuestionario oficial asignado por el docente y cuestionarios personales de práctica creados por el estudiante.
+  - Retroalimentación interactiva inmediata y evaluación asistida por IA para respuestas abiertas.
+- **Exportaciones portables:** Generación local de materiales descargables en formatos Markdown (`.md`), PDF (`.pdf`), Microsoft Word (`.docx`) y JSON (`.json`), con opción para exportar solo las preguntas (sin resolver) o las preguntas acompañadas de sus respuestas y pauta de corrección.
 
-El cuestionario recupera evidencia distinta desde ChromaDB, solicita a Gemini preguntas de opción múltiple y abiertas, y valida localmente que el número de preguntas, las cuatro opciones distintas y cada timestamp correspondan a evidencia recuperada. Si no hay evidencia suficiente, devuelve listas vacías con una nota explicativa, sin inventar preguntas.
+## Tecnologías
+El pipeline está implementado en **Python 3.11+** e integra las bibliotecas, modelos y servicios utilizados en la solución:
 
-Los recursos generados se almacenan en SQLite con un `material_id`: pueden consultarse o reemplazarse mediante API sin volver a consumir Gemini. Cada edición crea una versión histórica y los usuarios autorizados pueden restaurar una versión previa. También se exportan localmente a JSON, Markdown, PDF y DOCX dentro de `data/exports`. Para ingestas largas, `POST /api/v1/videos/ingest/async` devuelve de inmediato un `video_id`; la interfaz puede sondear `GET /api/v1/videos/{video_id}/progress` hasta obtener el estado `indexed` o `failed`.
+- **Framework Web & API:** FastAPI y Uvicorn para servir la API RESTful asíncrona y la interfaz web integrada (HTML5, CSS3, JavaScript ES Modules nativo).
+- **Ingesta y procesamiento multimedia:** `yt-dlp` para la descarga e inspección de videos públicos de YouTube y FFmpeg para la extracción y remuestreo de pistas de audio.
+- **Transcripción y segmentación temporal:** `faster-whisper` (Whisper local) para transcripción automática de voz a texto con detección de segmentos e intervalos de tiempo exactos.
+- **Embeddings y base de datos vectorial (RAG):** `sentence-transformers` (modelo `paraphrase-multilingual-MiniLM-L12-v2`) para la generación de representaciones vectoriales densas multilingües y `chromadb` local para almacenamiento y búsqueda semántica de fragmentos de texto (*chunks*).
+- **Modelos de Lenguaje (LLM):** `google-genai` conectando con la familia de modelos Google Gemini (como `gemini-2.0-flash` y `gemini-2.0-flash-lite`) mediante Google AI Studio como proveedor predeterminado, con adaptadores desacoplados para Groq (`llama-3.1-8b-instant`) y OpenAI (`gpt-4o-mini`).
+- **Persistencia relacional y metadatos:** SQLite configurado con modo WAL (`PRAGMA journal_mode=WAL`) y gestionado a través de SQLAlchemy 2.0 para el almacenamiento libre de contención de usuarios, historiales de video, versiones de materiales didácticos, grupos académicos, temas e intentos de evaluación.
+- **Autenticación y seguridad:** `python-jose` para emisión y validación de tokens JWT (Bearer) y `passlib` con `bcrypt` para hashing criptográfico de contraseñas y control de acceso basado en roles (docente/administrador vs. estudiante/miembro).
+- **Generación documental:** `reportlab` para la maquetación y generación programática de documentos PDF y `python-docx` para la generación estructurada de archivos Microsoft Word.
+- **Validación y configuración:** Pydantic v2 y `pydantic-settings` para la estricta validación de contratos de datos JSON y control de variables de entorno mediante `python-dotenv`.
+- **Pruebas de software:** Pytest y `httpx` para pruebas unitarias, de integración y verificación de permisos.
 
-Al solicitar un cuestionario, el cliente puede configurar uno o varios niveles de Bloom: `remember`, `understand`, `apply`, `analyze`, `evaluate` y `create`. Cada pregunta conserva su `bloom_level`. La retroalimentación de opción múltiple es inmediata y local; las respuestas abiertas se evalúan con Gemini y evidencia RAG, conservando el timestamp de respaldo del cuestionario.
+## Validación
+El sistema ha sido verificado mediante un conjunto integral de pruebas automatizadas y funcionales:
 
-La interfaz visual integrada está disponible en `http://127.0.0.1:8000/ui/`. Permite probar el flujo completo sin construir solicitudes HTTP manuales: ingesta con progreso, generación de resumen/cuestionario, selección Bloom, respuestas, retroalimentación, edición y exportación.
+- **Pruebas realizadas:**
+  - Suite de pruebas automatizadas con Pytest que abarca **75 casos de prueba** distribuidos en pruebas unitarias de servicios, repositorios, configuración y pruebas de integración de API extremo a extremo.
+  - Pruebas de permisos, roles y libro de calificaciones de grupos académicos.
+  - Pruebas de exportación multiformato (Markdown, PDF, DOCX y JSON).
+  - Pruebas funcionales de interfaz de usuario servida en `/ui/`.
 
-## Requisitos cubiertos
+- **Casos evaluados:**
+  - *Ingesta, concurrencia y segmentación:* Validación de restricciones de video (máximo 60 minutos, idiomas español e inglés), control de estado de procesamiento mediante semáforo de concurrencia para evitar saturación de CPU por Whisper, cancelación oportuna de trabajos de ingesta y consistencia de marcas de tiempo.
+  - *Fragmentación e indexación RAG:* División en trozos (*chunking*) con solapamiento, almacenamiento vectorial y recuperación basada en similitud semántica ordenada cronológicamente.
+  - *Generación condicionada (*grounded*):* Verificación de que cada término del glosario, bloque temático y pregunta del cuestionario cite marcas de tiempo existentes en la transcripción recuperada, rechazando alucinaciones o esquemas JSON malformados.
+  - *Lógica de evaluación pedagógica:* Corrección determinista de opciones múltiples, calificación cualitativa grounded de respuestas abiertas, cálculo de penalización progresiva por reintentos en exámenes y actualización de promedios en el libro de calificaciones.
+  - *Permisos y roles:* Validación de que solo el administrador puede crear o eliminar temas, expulsar miembros o regenerar códigos; aislamiento de cuestionarios personales por usuario; y restricción de autoevaluación para el administrador del grupo.
+  - *Exportación selectiva:* Verificación de que la exportación sin soluciones oculte las opciones correctas, explicaciones y puntos esperados, y que la exportación con soluciones los incorpore detalladamente.
+  - *Persistencia y concurrencia local:* Verificación de la inicialización de SQLite en modo WAL y timeout de espera para evitar bloqueos durante accesos simultáneos.
 
-- RF-01: ingesta y procesamiento de video.
-- RF-02: sinopsis, glosario y bloques didácticos.
-- RF-03: cuestionarios por niveles de Bloom.
-- RF-04: consulta y exportación.
-- RF-05: búsqueda de videos por palabras clave.
-- RF-06: configuración de parámetros didácticos.
+- **Resultados obtenidos:**
+  - 100% de la suite de pruebas automatizadas ejecutada con éxito (75 pruebas aprobadas).
+  - Validación estructurada estable de salidas de LLM mediante esquemas Pydantic.
+  - Trazabilidad y anclaje temporal funcional desde la interfaz de preguntas y glosario hacia el reproductor embebido de video.
 
-## Inicio local
+- **Limitaciones identificadas:**
+  - Duración restringida a videos de hasta 60 minutos para asegurar tiempos de transcripción razonables en hardware de consumo.
+  - La velocidad de transcripción local depende de las capacidades del equipo anfitrión (CPU frente a aceleración por GPU CUDA).
+  - Posible necesidad de suministrar un archivo de cookies Netscape (`cookies.txt`) si YouTube activa bloqueos temporales por peticiones automatizadas en determinados videos.
+  - Dependencia de disponibilidad de cuota o conectividad a internet para consultar la API de Google AI Studio / Gemini (mitigado con conmutación visual y programática hacia Groq / Llama).
+  - Base de datos local SQLite y ChromaDB optimizadas para ejecución local de prototipo o grupos reducidos, no orientadas a alta concurrencia distribuida en producción.
 
-Requiere Python 3.11+, FFmpeg y una clave gratuita de Google AI Studio. La clave de YouTube Data API v3 es opcional para el futuro buscador. Las dependencias `python-docx` y `reportlab`, incluidas en `backend/requirements.txt`, habilitan las exportaciones DOCX y PDF.
+## Estado
+Prototipo validado mediante pruebas, con desarrollo y mejoras pendientes.
 
-Si YouTube rechaza un video público con mensajes como `The page needs to be reloaded`, exporta las cookies de la sesión autenticada en formato Netscape y configura su ubicación mediante `YTDLP_COOKIE_FILE`. El archivo de cookies es confidencial y no debe subirse al repositorio.
+- **Alcance completado:**
+  - Pipeline integral de ingesta, transcripción local, indexación semántica y generación RAG de resúmenes, glosarios y cuestionarios.
+  - Control de concurrencia y serialización de ingestas locales mediante semáforo para mitigar saturación de CPU por Whisper.
+  - Botón de cancelación de ingesta en progreso con liberación oportuna de recursos y limpieza de audios temporales.
+  - Clasificación de preguntas según niveles de la taxonomía de Bloom y retroalimentación interactiva con penalización por reintentos.
+  - Gestión de grupos de estudio, administración de temas con formularios y confirmaciones emergentes (*pop-ups*), y separación entre cuestionarios del profesor y de práctica del estudiante.
+  - Selector visual interactivo de modelos con distintivo del proveedor activo e indicador de cuota para conmutar sin fricción entre Google Gemini y Groq Cloud (Llama 3.1).
+  - Exportación local multiformato y visor web integrado sin dependencias de frameworks externos pesados.
 
-\`\`\`powershell
-python -m venv backend\.venv
-.\backend\.venv\Scripts\Activate.ps1
-pip install -r backend\requirements.txt
-cd backend
-uvicorn app.main:app --reload
-\`\`\`
+- **Mejoras pendientes:**
+  - Soporte para videos de duración extendida mediante segmentación jerárquica de temas.
+  - Incorporación de rúbricas docentes personalizables para la evaluación automática de respuestas abiertas.
+  - Soporte para ingesta de material didáctico complementario en formato PDF o diapositivas.
+  - Transición hacia bases de datos relacionales cliente-servidor (ej. PostgreSQL + pgvector) y colas distribuidas (Celery + Redis) para entornos multiusuario a escala.
 
-Después de iniciar el servidor, abre `http://127.0.0.1:8000/ui/` y sigue el flujo de autenticación, ingesta y generación. Antes de probar, configura `GEMINI_API_KEY` y `JWT_SECRET_KEY` en `.env`, y verifica que FFmpeg esté instalado y disponible en `PATH`. Las cookies Netscape en `data/cookies.txt` sólo deben renovarse si YouTube bloquea la ingesta de un video nuevo. La documentación queda en `http://127.0.0.1:8000/docs`; `GET /api/v1/health` comprueba que la API levantó. Consulta `docs/CHANGELOG.md` para el historial por sprint.
+## Ejecución
+Para reproducir la ejecución del prototipo en un entorno local, siga los siguientes requisitos y pasos:
 
-## Carpetas
+### Requisitos previos
+- Sistema operativo Windows 10/11, Linux o macOS.
+- **Python 3.11** o superior instalado.
+- **FFmpeg** instalado y registrado en la variable de entorno `PATH` (verificable con `ffmpeg -version`).
+- Clave de API de Google AI Studio ([Google Gemini](https://aistudio.google.com/)).
 
-| Ruta | Propósito |
-| --- | --- |
-| \`app/api\` | Endpoints HTTP versionados y dependencias FastAPI. |
-| \`app/core\` | Configuración y aspectos transversales. |
-| \`app/db\` y \`app/models\` | SQLite, sesión y entidades de metadatos. |
-| \`app/schemas\` | Contratos Pydantic de entrada/salida. |
-| \`app/services\` | Casos de uso y adaptadores de YouTube, Whisper, RAG, Gemini y exportación. |
-| \`app/repositories\` | Acceso aislado a SQLite. |
-| \`app/utils\` | Funciones reutilizables, por ejemplo segmentación. |
-| \`tests\` | Pruebas unitarias y de integración. |
-| \`notebooks\` | Prototipos aislados de Whisper, embeddings/ChromaDB y Gemini. |
-| \`data\` | Datos locales: transcripciones, ChromaDB, SQLite y exportaciones. |
+### Configuración del entorno
+1. Clonar el repositorio y ubicarse en la raíz del proyecto.
+2. Crear el archivo de variables de entorno `.env` a partir de la plantilla:
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+3. Editar el archivo `.env` y configurar las claves requeridas:
+   ```ini
+   ACTIVE_MODEL_PROVIDER=gemini
+   GEMINI_API_KEY=tu_clave_de_google_ai_studio
+   JWT_SECRET_KEY=clave_secreta_aleatoria_para_tokens
+   ```
 
-## Estado del alcance
+### Pasos para reproducir la ejecución
+1. **Crear y activar el entorno virtual:**
+   ```powershell
+   python -m venv backend\.venv
+   .\backend\.venv\Scripts\Activate.ps1
+   ```
+2. **Instalar dependencias:**
+   ```powershell
+   pip install -r backend\requirements.txt
+   ```
+3. **Iniciar el servidor de backend y la interfaz web:**
+   ```powershell
+   cd backend
+   uvicorn app.main:app --reload
+   ```
+4. **Acceder al sistema:**
+   - Interfaz web interactiva: `http://127.0.0.1:8000/ui/`
+   - Documentación OpenAPI interactiva: `http://127.0.0.1:8000/docs`
 
-Los cinco sprints previstos han sido implementados. Las ampliaciones futuras pueden incorporar nuevos formatos o mejoras de interfaz, sin alterar el pipeline local actual.
+### Ejecución de pruebas automatizadas
+Con el entorno virtual activo, ejecute la suite de pruebas desde la carpeta `backend`:
+```powershell
+pytest
+```

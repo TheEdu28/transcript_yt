@@ -208,13 +208,14 @@ function renderTopics(topics) {
       const editIcon = `<svg class="ui-icon icon-pencil" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
       const trashIcon = `<svg class="ui-icon icon-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 
+      const quizLabel = isAdmin ? "Ver cuestionario (respuestas)" : "Realizar evaluación";
       const videoLinks = t.video_id
         ? `<div class="topic-links" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
              <a href="${urlFor("/ui/resumen/", resumenParams)}" class="topic-link" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#f0f5ff;border:1px solid #c9d5fa;border-radius:8px;font-size:13px;font-weight:700;color:var(--blue);text-decoration:none">
                ${bookIcon} Resumen didáctico ${t.summary_id ? checkIcon : ''}
              </a>
              <a href="${urlFor("/ui/quiz/", quizParams)}" class="topic-link" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#f5f0ff;border:1px solid #d8c9fa;border-radius:8px;font-size:13px;font-weight:700;color:var(--violet);text-decoration:none">
-               ${editIcon} Realizar evaluación ${quizId ? checkIcon : ''}
+               ${editIcon} ${quizLabel} ${quizId ? checkIcon : ''}
              </a>
            </div>`
         : `<p class="topic-no-video" style="margin:10px 0 0;font-size:12px;color:var(--muted)">Sin video asignado</p>`;
@@ -240,18 +241,57 @@ function renderTopics(topics) {
     .join("");
 
   list.querySelectorAll(".topic-delete").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      if (!confirm("¿Eliminar este tema del grupo?")) return;
-      try {
-        await apiDeleteTopic(groupId, Number(btn.dataset.id));
-        noticeVisible("Tema eliminado.", "success");
-        await loadTopics();
-      } catch (err) {
-        noticeVisible(err.message, "error");
-      }
+    btn.addEventListener("click", () => {
+      const topicId = Number(btn.dataset.id);
+      const topic = cachedTopics.find((t) => t.id === topicId);
+      openDeleteTopicModal(topicId, topic?.title || "");
     });
   });
 }
+
+// ==========================================
+// --- Modal Pop-up: Eliminar Tema ---
+// ==========================================
+let pendingDeleteTopicId = null;
+
+function openDeleteTopicModal(topicId, topicTitle) {
+  pendingDeleteTopicId = topicId;
+  const modal = byId("delete-topic-modal");
+  const msg = byId("delete-topic-msg");
+  if (msg) {
+    msg.textContent = topicTitle
+      ? `¿Estás seguro de que deseas eliminar el tema «${topicTitle}»? Se perderán las referencias a actividades e intentos asociados de los alumnos.`
+      : "¿Estás seguro de que deseas eliminar este tema? Se perderán las referencias a actividades e intentos asociados de los alumnos.";
+  }
+  if (modal) modal.style.display = "grid";
+}
+
+function closeDeleteTopicModal() {
+  const modal = byId("delete-topic-modal");
+  if (modal) modal.style.display = "none";
+  pendingDeleteTopicId = null;
+}
+
+byId("delete-topic-cancel-btn")?.addEventListener("click", closeDeleteTopicModal);
+byId("delete-topic-modal")?.addEventListener("click", (e) => {
+  if (e.target === byId("delete-topic-modal")) closeDeleteTopicModal();
+});
+
+byId("delete-topic-confirm-btn")?.addEventListener("click", async () => {
+  if (!pendingDeleteTopicId) return;
+  const btn = byId("delete-topic-confirm-btn");
+  await runWithButtonDisabled(btn, async () => {
+    try {
+      await apiDeleteTopic(groupId, pendingDeleteTopicId);
+      closeDeleteTopicModal();
+      noticeVisible("Tema eliminado con éxito.", "success");
+      await loadTopics();
+    } catch (err) {
+      closeDeleteTopicModal();
+      noticeVisible(err.message, "error");
+    }
+  });
+});
 
 async function loadTopics() {
   try {
@@ -262,16 +302,18 @@ async function loadTopics() {
   }
 }
 
-// Toggle formulario "Nuevo tema"
+// ==========================================
+// --- Modal Pop-up: Nuevo Tema ---
+// ==========================================
 function openTopicForm() {
-  byId("topic-form").style.display = "";
-  byId("toggle-new-topic-btn").style.display = "none";
-  byId("topic-title").focus();
+  const modal = byId("topic-modal");
+  if (modal) modal.style.display = "grid";
+  byId("topic-title")?.focus();
 }
 
 function closeTopicForm() {
-  byId("topic-form").style.display = "none";
-  if (isAdmin) byId("toggle-new-topic-btn").style.display = "";
+  const modal = byId("topic-modal");
+  if (modal) modal.style.display = "none";
   byId("topic-title").value = "";
   byId("topic-desc").value = "";
   byId("topic-video").value = "";
@@ -284,6 +326,9 @@ function closeTopicForm() {
 byId("toggle-new-topic-btn")?.addEventListener("click", openTopicForm);
 byId("cancel-topic-btn")?.addEventListener("click", closeTopicForm);
 byId("cancel-topic-btn-2")?.addEventListener("click", closeTopicForm);
+byId("topic-modal")?.addEventListener("click", (e) => {
+  if (e.target === byId("topic-modal")) closeTopicForm();
+});
 
 // ==========================================
 // --- PESTAÑA: MIEMBROS ---

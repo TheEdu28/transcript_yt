@@ -73,3 +73,16 @@ def test_ingest_result_preserves_the_synchronous_response_contract() -> None:
     """HU-02 adds async support without changing the original ingest result shape."""
     video = SimpleNamespace(id=12, title="Clase", language="es", duration_seconds=60, processing_seconds=2.5)
     assert PipelineService._ingest_result(video, 3)["chunks_indexed"] == 3
+
+
+def test_process_queued_ingest_aborts_when_cancelled(tmp_path: Path) -> None:
+    """HU-02 aborts early when the job has been marked as cancelled."""
+    video = SimpleNamespace(
+        id=12, youtube_id="abc", source_url="https://youtu.be/abc", title="Clase", duration_seconds=60,
+        language="es", transcript_path=str(tmp_path / "abc.json"), status="failed", progress_stage="cancelled", progress_percent=0,
+    )
+    repository = FakeRepository(video)
+    service = bare_pipeline(tmp_path, repository)
+    result = service.process_queued_ingest(12, FakeSession())
+    assert result["progress_stage"] == "cancelled"
+    assert result["status"] == "failed"

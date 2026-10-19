@@ -98,14 +98,40 @@ export function initModelSelector(containerId, fetchModels) {
       return `<optgroup label="${escapeHtml(providerLabels[provider] || provider)}">${options}</optgroup>`;
     }).join("");
 
+    const getBadgeStyle = (prov) => {
+      if (prov === "gemini") return { bg: "#e0f2fe", text: "#0369a1", label: "Google Gemini" };
+      if (prov === "groq") return { bg: "#fef3c7", text: "#92400e", label: "Groq Cloud" };
+      if (prov === "openai") return { bg: "#dcfce7", text: "#166534", label: "OpenAI" };
+      return { bg: "#f1f5f9", text: "#475569", label: prov };
+    };
+
+    const initialModel = models.find((m) => m.model_id === default_model_id) || models[0];
+    const initialBadge = initialModel ? getBadgeStyle(initialModel.provider) : getBadgeStyle("gemini");
+
     container.innerHTML = `
       <div class="model-selector">
-        <label class="model-selector-label" for="model-select">Modelo de IA</label>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+          <label class="model-selector-label" for="model-select">Modelo de IA</label>
+          <span id="model-provider-badge" style="font-size:0.75rem; font-weight:700; padding:2px 8px; border-radius:999px; background:${initialBadge.bg}; color:${initialBadge.text};">${escapeHtml(initialBadge.label)}</span>
+        </div>
         <select id="model-select" class="model-select">${optgroups}</select>
+        <div id="model-selector-hint" style="font-size:0.78rem; margin-top:6px; color:#475569; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:6px 9px; line-height:1.4;">
+          💡 <strong>Guía de cuota:</strong> Si la cuota gratuita de Gemini (~100 req/día) se agota, selecciona <strong>Groq (Llama 3.1)</strong> para continuar sin interrupciones.
+        </div>
       </div>`;
 
     const select = container.querySelector("#model-select");
-    select.addEventListener("change", () => { selectedModelId = select.value; });
+    const badge = container.querySelector("#model-provider-badge");
+    select.addEventListener("change", () => {
+      selectedModelId = select.value;
+      const current = models.find((m) => m.model_id === select.value);
+      if (current && badge) {
+        const style = getBadgeStyle(current.provider);
+        badge.textContent = style.label;
+        badge.style.background = style.bg;
+        badge.style.color = style.text;
+      }
+    });
   }).catch(() => { container.innerHTML = ""; });
 
   return { getSelectedModelId: () => selectedModelId };

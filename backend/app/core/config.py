@@ -37,8 +37,9 @@ class Settings(BaseSettings):
     max_video_duration_seconds: int = 3600
     chunk_words: int = 220
     chunk_overlap_segments: int = 2
-    rag_retrieval_limit: int = 6
-    max_gemini_context_chars: int = 12000
+    rag_retrieval_limit: int = 16
+    max_gemini_context_chars: int = 35000
+    max_summary_words: int = 500
     # 4096 permite completar el JSON del resumen sin enviar transcripciones largas.
     max_gemini_output_tokens: int = 4096
     # Archivo Netscape exportado desde el navegador autenticado; no se versiona.

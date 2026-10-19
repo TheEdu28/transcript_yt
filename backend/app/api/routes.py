@@ -1,4 +1,4 @@
-"""Rutas FastAPI que exponen los tres casos de uso del núcleo."""
+import threading
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
@@ -26,6 +26,7 @@ from app.services.pipeline import PipelineService
 from app.services.providers import list_available_models, list_available_providers
 
 router = APIRouter(prefix="/api/v1", tags=["pipeline"])
+INGESTION_SEMAPHORE = threading.BoundedSemaphore(value=1)
 
 def raise_http(error: PipelineError) -> None:
     """Do not leak provider details; expose a stable functional error code."""
@@ -33,15 +34,16 @@ def raise_http(error: PipelineError) -> None:
 
 
 def process_ingest_job(video_id: int) -> None:
-    """Run a queued job with its own SQLite session after the HTTP response is sent."""
-    session = SessionLocal()
-    try:
-        PipelineService().process_queued_ingest(video_id, session)
-    except PipelineError:
-        # The pipeline has already persisted a stable failed status for polling clients.
-        pass
-    finally:
-        session.close()
+    """Run a queued job with its own SQLite session, serializing heavy CPU-bound ingestion."""
+    with INGESTION_SEMAPHORE:
+        session = SessionLocal()
+        try:
+            PipelineService().process_queued_ingest(video_id, session)
+        except PipelineError:
+            # The pipeline has already persisted a stable failed status for polling clients.
+            pass
+        finally:
+            session.close()
 
 
 @router.get("/health")
@@ -134,6 +136,25 @@ def get_ingestion_progress(video_id: int, session: Session = Depends(get_session
         video_id=video.id, status=video.status, progress_stage=video.progress_stage,
         progress_percent=video.progress_percent, processing_seconds=video.processing_seconds,
     )
+
+
+@router.post("/videos/{video_id}/cancel")
+def cancel_ingestion_job(
+    video_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
+    """Cancela un trabajo de ingesta en cola o en ejecución."""
+    repo = VideoRepository()
+    video = repo.get(session, video_id)
+    if not video:
+        raise_http(PipelineError("El video no existe.", code="VIDEO_NOT_FOUND", status_code=404))
+    if video.owner_id is not None and video.owner_id != current_user.id:
+        raise_http(PipelineError("No tienes permiso para cancelar este video.", code="FORBIDDEN", status_code=403))
+    if video.status in {"queued", "processing"}:
+        repo.update_progress(session, video, "cancelled", 0, status="failed")
+        return {"status": "cancelled", "message": "Ingesta cancelada exitosamente."}
+    return {"status": video.status, "message": "El video no se encuentra en estado cancelable."}
 
 
 @router.post(
@@ -313,12 +334,15 @@ def evaluate_quiz_attempt(
 
 @router.get("/materials/{material_id}/export")
 def export_material(
-    material_id: int, format: ExportFormat = "markdown", session: Session = Depends(get_session),
+    material_id: int,
+    format: ExportFormat = "markdown",
+    include_answers: bool = Query(default=False),
+    session: Session = Depends(get_session),
 ) -> FileResponse:
     """HU-07: create and download a local JSON, Markdown, PDF or DOCX version."""
     try:
         material = MaterialService().get(session, material_id)
-        path = ExportService(get_settings()).export(material, format)
+        path = ExportService(get_settings()).export(material, format, include_answers=include_answers)
     except PipelineError as error:
         raise_http(error)
     media_types = {

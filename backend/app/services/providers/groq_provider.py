@@ -71,10 +71,11 @@ class GroqProvider(ModelProvider):
                 break
             except Exception as error:
                 logger.error("Error al llamar a Groq con modelo '%s': %s", self.settings.groq_model, error)
-                status_code = getattr(error, "status_code", None)
-                if status_code == 429:
+                status_code = getattr(error, "status_code", None) or getattr(error, "code", None)
+                err_str = str(error).upper()
+                if status_code == 429 or "429" in err_str or "RATE_LIMIT" in err_str or "QUOTA" in err_str:
                     raise PipelineError(
-                        "Cuota de Groq agotada para este modelo. Selecciona otro modelo.",
+                        "Cuota o límite de tasa de Groq agotado para este modelo. Selecciona otro modelo.",
                         code="GROQ_QUOTA_EXHAUSTED",
                         status_code=429,
                     ) from error
