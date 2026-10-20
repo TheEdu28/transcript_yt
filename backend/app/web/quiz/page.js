@@ -502,7 +502,7 @@ byId("generate-button")?.addEventListener("click", async () => {
   const bloomLevels = selectedBloomLevels();
   if (!bloomLevels.length) return showNotice("Selecciona al menos un nivel de Bloom.", "error");
 
-  await runWithButtonDisabled(byId("generate-button"), async () => {
+  await runWithButtonDisabled(byId("generate-button"), async (signal) => {
     try {
       showNotice("Generando cuestionario con evidencia RAG…");
       const payload = {
@@ -518,6 +518,7 @@ byId("generate-button")?.addEventListener("click", async () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal,
       });
 
       activeMaterialId = quiz.material_id;
@@ -548,9 +549,13 @@ byId("generate-button")?.addEventListener("click", async () => {
 
       updateExportVisibility(quiz.material_id);
     } catch (error) {
-      showNotice(error.message, "error");
+      if (error.name === "AbortError") {
+        showNotice("Generación cancelada por el usuario.");
+      } else {
+        showNotice(error.message, "error");
+      }
     }
-  });
+  }, { cancellable: true });
 });
 
 // =============================================================================

@@ -42,12 +42,26 @@ export function showNotice(message, type = "") {
   notice.className = `notice ${type}`.trim();
 }
 
-export async function runWithButtonDisabled(button, operation) {
+export async function runWithButtonDisabled(button, operation, { cancellable = false } = {}) {
   if (button.dataset.pending === "true") return;
   button.dataset.pending = "true";
   button.disabled = true;
-  try { return await operation(); }
+
+  const controller = new AbortController();
+  let cancelBtn = null;
+  if (cancellable && button.parentElement) {
+    cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "secondary";
+    cancelBtn.style.cssText = "margin-left:8px; background:#fee2e2; color:#991b1b; border:1px solid #fca5a5;";
+    cancelBtn.textContent = "✕ Cancelar";
+    cancelBtn.addEventListener("click", () => controller.abort());
+    button.insertAdjacentElement("afterend", cancelBtn);
+  }
+
+  try { return await operation(controller.signal); }
   finally {
+    if (cancelBtn) cancelBtn.remove();
     delete button.dataset.pending;
     button.disabled = false;
   }
@@ -83,7 +97,7 @@ export function initModelSelector(containerId, fetchModels) {
       byProvider[m.provider].push(m);
     }
 
-    const providerLabels = { gemini: "Google Gemini", openai: "OpenAI", groq: "Groq" };
+    const providerLabels = { gemini: "Google Gemini", openai: "OpenAI", groq: "Groq", nvidia: "NVIDIA NIM" };
 
     const optgroups = Object.entries(byProvider).map(([provider, providerModels]) => {
       const options = providerModels.map((m) => {
@@ -102,6 +116,7 @@ export function initModelSelector(containerId, fetchModels) {
       if (prov === "gemini") return { bg: "#e0f2fe", text: "#0369a1", label: "Google Gemini" };
       if (prov === "groq") return { bg: "#fef3c7", text: "#92400e", label: "Groq Cloud" };
       if (prov === "openai") return { bg: "#dcfce7", text: "#166534", label: "OpenAI" };
+      if (prov === "nvidia") return { bg: "#ecfdf5", text: "#047857", label: "NVIDIA NIM" };
       return { bg: "#f1f5f9", text: "#475569", label: prov };
     };
 

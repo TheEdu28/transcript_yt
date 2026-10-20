@@ -160,23 +160,28 @@ def cancel_ingestion_job(
 @router.post(
     "/materials/summary", response_model=SummaryResponse,
     responses={409: {"description": "Video sin indexar"}, 422: {"description": "Sin evidencia RAG"},
-               503: {"description": "Gemini no disponible temporalmente"},
-               502: {"description": "Respuesta Gemini inválida o no fundamentada"}},
+               503: {"description": "Proveedor no disponible temporalmente"},
+               502: {"description": "Respuesta inválida o no fundamentada"}},
 )
-def generate_summary(
+async def generate_summary(
     payload: SummaryRequest,
     current_user: User | None = Depends(get_optional_current_user),
     session: Session = Depends(get_session),
 ) -> SummaryResponse:
-    """RF-02: recupera contexto local y solicita la salida didáctica grounded a Gemini."""
+    """RF-02: recupera contexto local y solicita la salida didáctica grounded al proveedor activo."""
+    import anyio
+    owner_id = current_user.id if current_user else None
     try:
-        return PipelineService().summary(
-            payload.video_id,
-            payload.focus,
-            session,
-            model_provider=payload.model_provider,
-            model_id=payload.model_id,
-            owner_id=current_user.id if current_user else None,
+        return await anyio.to_thread.run_sync(
+            lambda: PipelineService().summary(
+                payload.video_id,
+                payload.focus,
+                session,
+                model_provider=payload.model_provider,
+                model_id=payload.model_id,
+                owner_id=owner_id,
+            ),
+            abandon_on_cancel=True,
         )
     except PipelineError as error:
         raise_http(error)
@@ -185,25 +190,30 @@ def generate_summary(
 @router.post(
     "/materials/quiz", response_model=QuizResponse,
     responses={409: {"description": "Video sin indexar"}, 422: {"description": "Sin evidencia RAG"},
-               503: {"description": "Gemini no disponible temporalmente"},
-               502: {"description": "Respuesta Gemini inválida o no fundamentada"}},
+               503: {"description": "Proveedor no disponible temporalmente"},
+               502: {"description": "Respuesta inválida o no fundamentada"}},
 )
-def generate_quiz(
+async def generate_quiz(
     payload: QuizRequest,
     current_user: User | None = Depends(get_optional_current_user),
     session: Session = Depends(get_session),
 ) -> QuizResponse:
     """RF-03: crea preguntas respaldadas por timestamps de la transcripción."""
+    import anyio
+    owner_id = current_user.id if current_user else None
     try:
-        return PipelineService().quiz(
-            payload.video_id,
-            payload.multiple_choice_count,
-            payload.open_question_count,
-            payload.bloom_levels,
-            session,
-            model_provider=payload.model_provider,
-            model_id=payload.model_id,
-            owner_id=current_user.id if current_user else None,
+        return await anyio.to_thread.run_sync(
+            lambda: PipelineService().quiz(
+                payload.video_id,
+                payload.multiple_choice_count,
+                payload.open_question_count,
+                payload.bloom_levels,
+                session,
+                model_provider=payload.model_provider,
+                model_id=payload.model_id,
+                owner_id=owner_id,
+            ),
+            abandon_on_cancel=True,
         )
     except PipelineError as error:
         raise_http(error)

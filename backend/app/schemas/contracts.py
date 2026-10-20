@@ -9,7 +9,7 @@ from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field, model_validator
 Timestamp = Annotated[str, Field(pattern=r"^\d{2}:\d{2}:\d{2}$")]
 
 # Proveedores de LLM soportados por el sistema.
-ModelProviderName = Literal["gemini", "openai", "groq"]
+ModelProviderName = Literal["gemini", "openai", "groq", "nvidia"]
 
 
 class ModelInfo(BaseModel):

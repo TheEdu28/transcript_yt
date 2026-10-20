@@ -13,9 +13,11 @@ from app.services.pipeline import parse_grounded_summary
 from app.services.providers import (
     GeminiProvider,
     ModelProvider,
+    NvidiaProvider,
     OpenAIProvider,
     get_model_provider,
 )
+from app.services.providers.factory import _is_valid_gemini_content_model
 
 
 class MockPydanticModel(BaseModel):
@@ -116,3 +118,69 @@ def test_openai_provider_calls_sdk_with_structured_output() -> None:
         call_kwargs = mock_client.beta.chat.completions.parse.call_args[1]
         assert call_kwargs["model"] == "gpt-4o-mini"
         assert call_kwargs["response_format"] == SummaryResponse
+
+
+def test_factory_returns_nvidia_provider() -> None:
+    """La fábrica debe resolver NvidiaProvider cuando active_model_provider='nvidia'."""
+    settings = Settings(
+        active_model_provider="nvidia",
+        nvidia_api_key="fake-nvidia-key",
+        nvidia_model="deepseek-ai/deepseek-v4.1-flash",
+    )
+    provider = get_model_provider(settings)
+    assert isinstance(provider, NvidiaProvider)
+    assert isinstance(provider, ModelProvider)
+
+
+def test_nvidia_provider_calls_sdk() -> None:
+    """NvidiaProvider debe invocar el endpoint compatible con OpenAI con el modelo de Deepseek."""
+    settings = Settings(
+        active_model_provider="nvidia",
+        nvidia_api_key="nvapi-test-key",
+        nvidia_model="deepseek-ai/deepseek-v4.1-flash",
+        nvidia_base_url="https://integrate.api.nvidia.com/v1",
+    )
+    provider = NvidiaProvider(settings)
+
+    mock_choice = MagicMock()
+    mock_choice.message.content = '{"synopsis": "Ok", "glossary": [], "didactic_blocks": [], "evidence_sufficient": true}'
+    mock_completion = MagicMock(choices=[mock_choice])
+
+    with patch("openai.OpenAI") as mock_openai_cls:
+        mock_client = MagicMock()
+        mock_client.chat.completions.create.return_value = mock_completion
+        mock_openai_cls.return_value = mock_client
+
+        result = provider.generate_json(
+            task="Genera resumen",
+            evidence=[{"start": "00:00:00", "end": "00:00:10", "text": "Texto de prueba"}],
+            response_schema=SummaryResponse,
+        )
+
+        assert "synopsis" in result
+        mock_client.chat.completions.create.assert_called_once()
+        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        assert call_kwargs["model"] == "deepseek-ai/deepseek-v4.1-flash"
+
+
+def test_gemini_models_filter_antigravity_and_below_3_5() -> None:
+    """Valida que los modelos no aptos para contenido (Antigravity, TTS, imagen) y < 3.5 se descarten."""
+    # Modelos que deben descartarse
+    assert not _is_valid_gemini_content_model("models/antigravity-preview-05-2026")
+    assert not _is_valid_gemini_content_model("models/antigravity-preview-latest")
+    assert not _is_valid_gemini_content_model("models/deep-research-preview-04-2026")
+    assert not _is_valid_gemini_content_model("models/gemini-2.5-flash")
+    assert not _is_valid_gemini_content_model("models/gemini-3.1-pro-preview")
+    assert not _is_valid_gemini_content_model("models/gemini-3.8-flash-tts")
+    assert not _is_valid_gemini_content_model("models/gemini-3.1-flash-image")
+    assert not _is_valid_gemini_content_model("models/gemini-3.5-transcribe")
+
+    # Modelos válidos de generación de contenido >= 3.5
+    assert _is_valid_gemini_content_model("models/gemini-3.5-flash")
+    assert _is_valid_gemini_content_model("models/gemini-3.5-flash-lite")
+    assert _is_valid_gemini_content_model("models/gemini-3.6-flash")
+    assert _is_valid_gemini_content_model("models/gemini-3.7-flash")
+    assert _is_valid_gemini_content_model("models/gemini-3.8-flash")
+    assert _is_valid_gemini_content_model("models/gemini-flash-latest")
+    assert _is_valid_gemini_content_model("models/gemma-4-31b-it")
+

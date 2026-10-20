@@ -21,12 +21,15 @@ class Settings(BaseSettings):
     active_model_provider: str = "gemini"
     active_model_id: str = ""
     gemini_api_key: str = ""
-    gemini_model: str = "gemini-2.0-flash-lite"
+    gemini_model: str = "gemini-3.5-flash-lite"
     openai_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
     openai_base_url: str | None = None
     groq_api_key: str = ""
     groq_model: str = "llama-3.1-8b-instant"
+    nvidia_api_key: str = ""
+    nvidia_model: str = "deepseek-ai/deepseek-v4.1-flash"
+    nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60

@@ -438,7 +438,7 @@ async function init() {
 }
 
 byId("generate-button").addEventListener("click", async () => {
-  await runWithButtonDisabled(byId("generate-button"), async () => {
+  await runWithButtonDisabled(byId("generate-button"), async (signal) => {
     try {
       showNotice("Generando resumen fundamentado con evidencia RAG…");
       const payload = { video_id: videoId };
@@ -449,6 +449,7 @@ byId("generate-button").addEventListener("click", async () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal,
       });
 
       renderSummary(summary);
@@ -458,9 +459,13 @@ byId("generate-button").addEventListener("click", async () => {
       byId("material-link").href = urlFor("/ui/material/", { video: videoId, material: summary.material_id });
       showNotice(`Resumen creado como material ${summary.material_id}.`, "success");
     } catch (error) {
-      showNotice(error.message, "error");
+      if (error.name === "AbortError") {
+        showNotice("Generación cancelada por el usuario.");
+      } else {
+        showNotice(error.message, "error");
+      }
     }
-  });
+  }, { cancellable: true });
 });
 
 init();

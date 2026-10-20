@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from app.core.config import Settings, get_settings
 from app.core.errors import PipelineError
@@ -12,13 +13,52 @@ from app.services.providers.openai_provider import OpenAIProvider
 
 logger = logging.getLogger(__name__)
 
-# Modelos que no son útiles para generación de texto (embeddings, imagen, etc.)
-_GEMINI_SKIP_PREFIXES = ("models/embedding", "models/aqa", "models/text-embedding")
+# Modelos que no son útiles para generación didáctica (embeddings, imagen, tts, etc.)
+_GEMINI_SKIP_KEYWORDS = (
+    "embedding", "aqa", "antigravity", "deep-research", "tts", "image",
+    "audio", "lyria", "robotics", "computer-use", "transcribe", "banana"
+)
 _GROQ_SKIP_SUFFIXES = ("-whisper", "-vision")
+_NVIDIA_SKIP_KEYWORDS = ("embed", "clip", "detector", "reward", "guard", "calibration")
+
+
+def _is_valid_gemini_content_model(name: str) -> bool:
+    """Filtra modelos de Gemini: solo texto para generación de contenido y versión >= 3.5."""
+    short = name.removeprefix("models/").lower()
+
+    # Debe ser de la familia gemini o gemma
+    if not (short.startswith("gemini-") or short.startswith("gemma-")):
+        return False
+
+    # Excluir palabras clave de modelos especializados o no aptos para generar texto
+    if any(kw in short for kw in _GEMINI_SKIP_KEYWORDS):
+        return False
+
+    # Mantener alias latest (ej: gemini-flash-latest, gemini-pro-latest)
+    if "latest" in short:
+        return True
+
+    # Verificar versión numérica >= 3.5 para gemini
+    match_gemini = re.search(r"gemini-(\d+(?:\.\d+)?)", short)
+    if match_gemini:
+        try:
+            return float(match_gemini.group(1)) >= 3.5
+        except ValueError:
+            return False
+
+    # Verificar versión numérica >= 3.5 para gemma
+    match_gemma = re.search(r"gemma-(\d+(?:\.\d+)?)", short)
+    if match_gemma:
+        try:
+            return float(match_gemma.group(1)) >= 3.5
+        except ValueError:
+            return False
+
+    return False
 
 
 def _fetch_gemini_models(api_key: str) -> list[dict]:
-    """Consulta la API de Gemini y devuelve modelos de generación de texto."""
+    """Consulta la API de Gemini y devuelve modelos de generación de texto >= 3.5."""
     try:
         import httpx
         resp = httpx.get(
@@ -32,9 +72,9 @@ def _fetch_gemini_models(api_key: str) -> list[dict]:
         models = []
         for m in resp.json().get("models", []):
             name = m.get("name", "")
-            if any(name.startswith(p) for p in _GEMINI_SKIP_PREFIXES):
-                continue
             if "generateContent" not in m.get("supportedGenerationMethods", []):
+                continue
+            if not _is_valid_gemini_content_model(name):
                 continue
             short = name.removeprefix("models/")
             models.append({"model_id": f"gemini/{short}", "label": m.get("displayName", short)})
@@ -68,6 +108,46 @@ def _fetch_groq_models(api_key: str) -> list[dict]:
     except Exception as exc:
         logger.warning("No se pudo obtener la lista de modelos de Groq: %s", exc)
         return []
+
+
+# Modelos de generación de contenido activos en NVIDIA NIM (excluyendo funciones retiradas 404/410)
+_NVIDIA_ACTIVE_MODELS: dict[str, str] = {
+    "deepseek-ai/deepseek-v4.1-flash": "DeepSeek V4.1 Flash (deepseek-ai/deepseek-v4.1-flash)",
+    "google/gemma-4-31b-it": "Gemma 4 31B IT (google/gemma-4-31b-it)",
+    "nvidia/nemotron-3.5-lightning-30b-a3b": "Nemotron 3.5 Lightning 30B",
+    "meta/llama-3.2-11b-vision-instruct": "Llama 3.2 11B Instruct",
+    "openai/gpt-oss-20b": "GPT-OSS 20B (openai/gpt-oss-20b)",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "Nemotron 3 Nano 30B",
+    "nvidia/nemotron-3-super-120b-a12b": "Nemotron 3 Super 120B",
+}
+
+
+def _fetch_nvidia_models(api_key: str, base_url: str | None = None) -> list[dict]:
+    """Consulta la API de NVIDIA NIM y devuelve únicamente los modelos activos de generación."""
+    url = (base_url or "https://integrate.api.nvidia.com/v1").rstrip("/") + "/models"
+    try:
+        import httpx
+        resp = httpx.get(
+            url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=8,
+        )
+        if resp.status_code == 429:
+            return [{"quota_exhausted": True}]
+        resp.raise_for_status()
+        raw_ids = {m.get("id", "") for m in resp.json().get("data", [])}
+
+        models = []
+        for mid, label in _NVIDIA_ACTIVE_MODELS.items():
+            if not raw_ids or mid in raw_ids:
+                models.append({"model_id": f"nvidia/{mid}", "label": label})
+        return models
+    except Exception as exc:
+        logger.warning("No se pudo obtener la lista de modelos de NVIDIA NIM: %s", exc)
+        return [
+            {"model_id": f"nvidia/{mid}", "label": label}
+            for mid, label in _NVIDIA_ACTIVE_MODELS.items()
+        ]
 
 
 def list_available_models(settings: Settings | None = None) -> dict:
@@ -133,6 +213,33 @@ def list_available_models(settings: Settings | None = None) -> dict:
             "is_default": False,
         })
 
+    # --- NVIDIA NIM ---
+    if resolved.nvidia_api_key:
+        nvidia_models = _fetch_nvidia_models(resolved.nvidia_api_key, resolved.nvidia_base_url)
+        if nvidia_models and nvidia_models[0].get("quota_exhausted"):
+            quota_exhausted_providers.add("nvidia")
+            models.append({
+                "model_id": f"nvidia/{resolved.nvidia_model}",
+                "provider": "nvidia",
+                "label": resolved.nvidia_model,
+                "available": True,
+                "quota_exhausted": True,
+                "is_default": False,
+            })
+        else:
+            for m in nvidia_models:
+                models.append({**m, "provider": "nvidia", "available": True,
+                                "quota_exhausted": False, "is_default": False})
+    else:
+        models.append({
+            "model_id": f"nvidia/{resolved.nvidia_model}",
+            "provider": "nvidia",
+            "label": resolved.nvidia_model,
+            "available": False,
+            "quota_exhausted": False,
+            "is_default": False,
+        })
+
     # Determinar modelo predeterminado
     default_id = resolved.active_model_id or f"{resolved.active_model_provider}/{resolved.gemini_model if resolved.active_model_provider == 'gemini' else resolved.groq_model}"
     # Si el default configurado existe en la lista, marcarlo; si no, usar el primero disponible
@@ -186,9 +293,12 @@ def get_model_provider(
     elif provider == "groq":
         from app.services.providers.groq_provider import GroqProvider
         return GroqProvider(resolved_settings if not model_name else _settings_with(resolved_settings, groq_model=model_name))
+    elif provider in {"nvidia", "nvidia-nim", "nim"}:
+        from app.services.providers.nvidia_provider import NvidiaProvider
+        return NvidiaProvider(resolved_settings if not model_name else _settings_with(resolved_settings, nvidia_model=model_name))
     else:
         raise PipelineError(
-            f"Proveedor '{provider}' no soportado. Valores válidos: 'gemini', 'openai', 'groq'.",
+            f"Proveedor '{provider}' no soportado. Valores válidos: 'gemini', 'openai', 'groq', 'nvidia'.",
             code="UNKNOWN_MODEL_PROVIDER",
             status_code=400,
         )
