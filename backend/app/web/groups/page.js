@@ -1,5 +1,5 @@
-import { apiCreateGroup, apiGetMyGroups, apiJoinGroup } from "/ui/api.js";
-import { escapeHtml, renderUserBar, requireAuth, runWithButtonDisabled, showNotice, showToast, urlFor } from "/ui/shared.js";
+import { apiCreateGroup, apiGetMyGroups, apiJoinGroup } from "/ui/api.js?v=2";
+import { escapeHtml, renderUserBar, requireAuth, runWithButtonDisabled, showNotice, showToast, urlFor } from "/ui/shared.js?v=2";
 
 requireAuth();
 renderUserBar();

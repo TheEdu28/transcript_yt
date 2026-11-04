@@ -1,5 +1,5 @@
-import { request } from "/ui/api.js";
-import { confirmModal, goTo, renderUserBar, requireAuth, runWithButtonDisabled, showNotice } from "/ui/shared.js";
+import { request } from "/ui/api.js?v=2";
+import { confirmModal, goTo, renderUserBar, requireAuth, runWithButtonDisabled, showNotice } from "/ui/shared.js?v=2";
 
 requireAuth();
 renderUserBar();

@@ -1,4 +1,4 @@
-import { auth } from "/ui/api.js";
+import { auth } from "/ui/api.js?v=2";
 
 /** Redirige a /ui/auth/ si no hay sesión activa. Llamar al inicio de páginas protegidas. */
 export function requireAuth() {

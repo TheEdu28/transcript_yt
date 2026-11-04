@@ -1,5 +1,5 @@
-import { apiDeleteVideo, apiListGroups, apiListMyVideos, apiPublishVideoAsTopic } from "/ui/api.js";
-import { confirmModal, escapeHtml, renderUserBar, requireAuth, runWithButtonDisabled, showNotice, urlFor } from "/ui/shared.js";
+import { apiDeleteVideo, apiListGroups, apiListMyVideos, apiPublishVideoAsTopic } from "/ui/api.js?v=2";
+import { confirmModal, escapeHtml, renderUserBar, requireAuth, runWithButtonDisabled, showNotice, urlFor } from "/ui/shared.js?v=2";
 
 requireAuth();
 renderUserBar();

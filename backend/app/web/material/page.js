@@ -1,5 +1,5 @@
-import { apiListMyMaterials, auth, request } from "/ui/api.js";
-import { confirmModal, escapeHtml, getPositiveIntParam, renderUserBar, requireAuth, replaceUrl, runWithButtonDisabled, showNotice, showToast, urlFor } from "/ui/shared.js";
+import { apiListMyMaterials, auth, request } from "/ui/api.js?v=2";
+import { confirmModal, escapeHtml, getPositiveIntParam, renderUserBar, requireAuth, replaceUrl, runWithButtonDisabled, showNotice, showToast, urlFor } from "/ui/shared.js?v=2";
 
 requireAuth();
 renderUserBar();

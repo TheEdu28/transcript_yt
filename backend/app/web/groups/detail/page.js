@@ -16,7 +16,7 @@ import {
   apiRemoveMember,
   apiUpdateAttemptGrade,
   auth,
-} from "/ui/api.js";
+} from "/ui/api.js?v=2";
 import {
   confirmModal,
   escapeHtml,
@@ -27,7 +27,7 @@ import {
   showNotice,
   showToast,
   urlFor,
-} from "/ui/shared.js";
+} from "/ui/shared.js?v=2";
 
 requireAuth();
 renderUserBar();

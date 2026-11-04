@@ -1,4 +1,4 @@
-import { apiGetTopicMaterials, apiGetVideo, apiListMyVideos, apiSubmitAttempt, auth, fetchModels, request } from "/ui/api.js";
+import { apiGetTopicMaterials, apiGetVideo, apiListMyVideos, apiSubmitAttempt, auth, fetchModels, request } from "/ui/api.js?v=2";
 import {
   escapeHtml,
   getPositiveIntParam,
@@ -9,7 +9,7 @@ import {
   runWithButtonDisabled,
   showNotice,
   urlFor,
-} from "/ui/shared.js";
+} from "/ui/shared.js?v=2";
 
 const byId = (id) => document.getElementById(id);
 requireAuth();

@@ -1,5 +1,5 @@
-import { auth, apiLogin, apiMe, apiRegister } from "/ui/api.js";
-import { runWithButtonDisabled, showNotice } from "/ui/shared.js";
+import { auth, apiLogin, apiMe, apiRegister } from "/ui/api.js?v=2";
+import { runWithButtonDisabled, showNotice } from "/ui/shared.js?v=2";
 
 // Si ya hay sesión válida, saltar directo a grupos
 if (auth.isLoggedIn()) {

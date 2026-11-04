@@ -77,7 +77,22 @@ app.include_router(router)
 app.include_router(auth_router)
 app.include_router(groups_router)
 WEB_DIRECTORY = Path(__file__).resolve().parent / "web"
-app.mount("/ui", StaticFiles(directory=WEB_DIRECTORY, html=True), name="ui")
+
+
+class RevalidatingStaticFiles(StaticFiles):
+    """Sirve la UI obligando al navegador a revalidar JS/CSS/HTML en cada carga.
+
+    Evita que un ``api.js`` antiguo en caché rompa los módulos ES al actualizar
+    ``page.js`` (p. ej. "does not provide an export named ...").
+    """
+
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/ui", RevalidatingStaticFiles(directory=WEB_DIRECTORY, html=True), name="ui")
 
 
 @app.get("/", include_in_schema=False)
