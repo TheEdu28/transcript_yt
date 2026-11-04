@@ -1,2 +1,0 @@
-"""Capa de transporte HTTP."""
-

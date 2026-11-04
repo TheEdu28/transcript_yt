@@ -78,3 +78,14 @@ Thumbs.db
 !/data/
 !/data/**/
 !.gitkeep
+
+# Notas internas de agentes y artefactos de planificacion
+.agents/
+/PROJECT.md
+/TEST_INFRA.md
+/TEST_READY.md
+
+# Bases de datos y vectores locales del backend
+/backend/chroma/
+/backend/data/
+backend/venv/

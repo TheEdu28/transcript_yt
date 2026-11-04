@@ -1,2 +1,0 @@
-"""Infraestructura de persistencia SQLite."""
-

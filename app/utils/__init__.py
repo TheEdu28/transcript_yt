@@ -1,2 +1,0 @@
-"""Utilidades reutilizables y puras."""
-
