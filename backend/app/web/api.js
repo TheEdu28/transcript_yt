@@ -93,8 +93,11 @@ export async function apiDeleteTopic(groupId, topicId) {
 }
 
 // --- Videos ---
-export async function apiListMyVideos(page = 1, pageSize = 20, status = null) {
-  const params = `page=${page}&page_size=${pageSize}${status ? `&status=${status}` : ""}`;
+export async function apiListMyVideos(page = 1, pageSize = 20, status = null, search = null, order = "desc") {
+  let params = `page=${page}&page_size=${pageSize}`;
+  if (status) params += `&status=${encodeURIComponent(status)}`;
+  if (search && search.trim()) params += `&search=${encodeURIComponent(search.trim())}`;
+  if (order) params += `&order=${encodeURIComponent(order)}`;
   return request(`/videos?${params}`);
 }
 export async function apiGetVideo(videoId) {
@@ -143,7 +146,13 @@ export async function apiGetMyTopicAttempts(groupId, topicId) {
 export async function apiGetAllTopicAttempts(groupId, topicId) {
   return request(`/groups/${groupId}/topics/${topicId}/attempts`);
 }
+export async function apiGetTopicStudentAttempts(groupId, topicId, userId) {
+  return request(`/groups/${groupId}/topics/${topicId}/attempts?user_id=${userId}`);
+}
 export async function apiGetTopicSummary(groupId, topicId) {
   return request(`/groups/${groupId}/topics/${topicId}/summary`);
+}
+export async function apiGetTopicStudentSummaries(groupId, topicId) {
+  return request(`/groups/${groupId}/topics/${topicId}/student-summaries`);
 }
 

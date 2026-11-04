@@ -499,6 +499,8 @@ class MemberTopicSummary(BaseModel):
     latest_attempt: AttemptResponse | None
     average_final_score: float | None
     average_raw_score: float | None
+    status: Literal["evaluated", "pending", "not_submitted"] = "pending"
+    final_score: float | None = None
 
 
 class TopicSummaryResponse(BaseModel):

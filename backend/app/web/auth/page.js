@@ -2,38 +2,43 @@ import { auth, apiLogin, apiMe, apiRegister } from "/ui/api.js";
 import { runWithButtonDisabled, showNotice } from "/ui/shared.js";
 
 // Si ya hay sesión válida, saltar directo a grupos
-if (auth.isLoggedIn()) window.location.assign("/ui/groups/");
+if (auth.isLoggedIn()) {
+  window.location.assign("/ui/groups/");
+}
 
 const byId = (id) => document.getElementById(id);
 
-function noticeVisible(msg, type) {
-  const el = byId("notice");
-  el.textContent = msg;
-  el.className = `notice ${type}`.trim();
-  el.style.display = "";
-}
-
 function switchTab(tabName) {
-  document.querySelectorAll(".auth-choice").forEach((t) => {
-    const active = t.dataset.tab === tabName;
-    t.classList.toggle("auth-choice--active", active);
-    t.classList.toggle("secondary", !active);
-    t.setAttribute("aria-selected", String(active));
-  });
-  byId("login-form").style.display    = tabName === "login"    ? "" : "none";
-  byId("register-form").style.display = tabName === "register" ? "" : "none";
-  byId("notice").style.display = "none";
+  const isLogin = tabName === "login";
+  byId("tab-login")?.classList.toggle("auth-tab-btn--active", isLogin);
+  byId("tab-login")?.setAttribute("aria-selected", String(isLogin));
+
+  byId("tab-register")?.classList.toggle("auth-tab-btn--active", !isLogin);
+  byId("tab-register")?.setAttribute("aria-selected", String(!isLogin));
+
+  byId("login-form").style.display = isLogin ? "" : "none";
+  byId("register-form").style.display = isLogin ? "none" : "";
+
+  // Ocultar avisos previos al cambiar de pestaña
+  showNotice("");
+
+  if (isLogin) {
+    byId("login-email")?.focus();
+  } else {
+    byId("reg-name")?.focus();
+  }
 }
 
-// --- Tabs (solo escuchar clicks en botones secundarios de cambio de pestaña) ---
-document.querySelectorAll(".auth-choice[type='button']").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    switchTab(tab.dataset.tab);
-  });
-});
+// Botones de pestañas superiores
+byId("tab-login")?.addEventListener("click", () => switchTab("login"));
+byId("tab-register")?.addEventListener("click", () => switchTab("register"));
+
+// Enlaces de texto alternativo al pie
+byId("goto-register-link")?.addEventListener("click", () => switchTab("register"));
+byId("goto-login-link")?.addEventListener("click", () => switchTab("login"));
 
 // --- Login ---
-byId("login-form").addEventListener("submit", async (e) => {
+byId("login-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   await runWithButtonDisabled(byId("login-btn"), async () => {
     try {
@@ -41,26 +46,31 @@ byId("login-form").addEventListener("submit", async (e) => {
       const password = byId("login-password").value;
       const res = await apiLogin(email, password);
       if (!res?.access_token) {
-        throw new Error("No se recibió el token de autenticación.");
+        throw new Error("No se recibió el token de autenticación del servidor.");
       }
       auth.save(res.access_token, {});
       const user = await apiMe();
       auth.save(res.access_token, user);
+      showNotice("Sesión iniciada correctamente. Redirigiendo…", "success");
       window.location.assign("/ui/groups/");
     } catch (err) {
-      noticeVisible(err.message, "error");
+      showNotice(err.message, "error");
     }
   });
 });
 
 // --- Registro con auto-login fluido ---
-byId("register-form").addEventListener("submit", async (e) => {
+byId("register-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   await runWithButtonDisabled(byId("register-btn"), async () => {
     try {
       const name = byId("reg-name").value.trim();
       const email = byId("reg-email").value.trim().toLowerCase();
       const password = byId("reg-password").value;
+
+      if (password.length < 8) {
+        throw new Error("La contraseña debe tener al menos 8 caracteres.");
+      }
 
       await apiRegister(name, email, password);
 
@@ -70,18 +80,19 @@ byId("register-form").addEventListener("submit", async (e) => {
         auth.save(access_token, {});
         const user = await apiMe();
         auth.save(access_token, user);
+        showNotice("¡Cuenta creada exitosamente! Redirigiendo a tu aula…", "success");
         window.location.assign("/ui/groups/");
         return;
-      } catch (loginErr) {
+      } catch {
         // Fallback si por alguna razón falla el login automático
         switchTab("login");
         byId("login-email").value = email;
         byId("login-password").value = "";
         byId("login-password").focus();
-        noticeVisible("Cuenta creada exitosamente. Ingresa tu contraseña para acceder.", "success");
+        showNotice("Cuenta creada exitosamente. Ingresa tu contraseña para acceder.", "success");
       }
     } catch (err) {
-      noticeVisible(err.message, "error");
+      showNotice(err.message, "error");
     }
   });
 });

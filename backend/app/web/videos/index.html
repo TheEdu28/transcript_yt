@@ -1,45 +1,107 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mis videos · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
-<body><main class="shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1>Mis <span>videos</span></h1></div>
-<div id="user-bar" class="user-bar"></div></header>
-<nav class="steps" aria-label="Navegación">
-  <a href="/ui/groups/">← Mis grupos</a><i></i>
-  <a href="/ui/video/">Importar nuevo</a>
-</nav>
-<div id="notice" class="notice" role="status" style="display:none"></div>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mis videos · AulaVideo</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">AULAVIDEO</p>
+      <h1>Mis <span>videos</span></h1>
+      <p class="hero-subtitle">Historial de videos procesados para consultar resúmenes, cuestionarios o publicarlos en grupos.</p>
+    </div>
+    <div id="user-bar" class="user-bar"></div>
+  </header>
 
-<section class="panel">
-  <div class="panel-heading"><p class="number">HISTORIAL</p><h2>Videos procesados</h2></div>
-  <p class="hint">Solo se muestran los videos que tú ingestaste. Haz clic en un video para reabrirlo o publícalo como tema en uno de tus grupos.</p>
-  <div class="vid-filters">
-    <label class="vid-filter-label">Filtrar por estado
-      <select id="status-filter">
-        <option value="">Todos</option>
-        <option value="indexed">Indexado</option>
-        <option value="queued">En cola</option>
-        <option value="processing">Procesando</option>
-        <option value="failed">Fallido</option>
-      </select>
-    </label>
-  </div>
-  <div id="videos-list" class="empty-state">Cargando…</div>
-  <div id="pagination" class="pagination" style="margin-top:16px"></div>
-</section>
+  <nav class="steps" aria-label="Navegación">
+    <a href="/ui/groups/">← Mis grupos</a><i></i>
+    <span>Mis videos</span><i></i>
+    <a href="/ui/video/">+ Procesar nuevo video</a>
+  </nav>
 
-<!-- Modal publicar como tema -->
-<div id="publish-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-  <div class="modal">
-    <h3 id="modal-title">Publicar como tema</h3>
-    <p id="modal-video-name" class="hint"></p>
-    <form id="publish-form" class="stack">
-      <label>Grupo<select id="publish-group" required></select></label>
-      <label>Título del tema<input id="publish-title" type="text" required></label>
-      <label>Descripción (opcional)<input id="publish-desc" type="text"></label>
-      <div class="actions two-actions">
-        <button type="button" id="modal-cancel" class="secondary btn-icon"><svg class="ui-icon icon-close" aria-hidden="true" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Cancelar</button>
-        <button type="submit" id="modal-submit">Publicar →</button>
+  <div id="notice" class="notice" role="status" style="display:none"></div>
+
+  <section class="panel">
+    <div class="panel-heading" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <p class="number">HISTORIAL</p>
+        <h2>Videos procesados</h2>
       </div>
-    </form>
+      <a href="/ui/video/" class="primary-action" style="margin:0;padding:6px 14px;font-size:12.5px">
+        <svg class="ui-icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Procesar nuevo video
+      </a>
+    </div>
+    <p class="hint">Videos que has importado y analizado con Whisper y RAG. Abre sus materiales o publícalos como actividades didácticas en tus grupos.</p>
+
+    <div class="vid-filters" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <label class="vid-filter-label" for="video-search-input">
+          Buscar por título
+          <input type="search" id="video-search-input" placeholder="Buscar por título..." style="padding:6px 10px;font-size:13px;border:1px solid var(--line);border-radius:6px;min-width:220px">
+        </label>
+        <label class="vid-filter-label" for="sort-order-filter">
+          Ordenar por
+          <select id="sort-order-filter">
+            <option value="desc" selected>Más recientes primero</option>
+            <option value="asc">Más antiguos primero</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="vid-filter-label" for="status-filter">
+        Filtrar por estado
+        <select id="status-filter">
+          <option value="">Todos los estados</option>
+          <option value="indexed">Indexado (Listo)</option>
+          <option value="queued">En cola</option>
+          <option value="processing">Procesando</option>
+          <option value="failed">Fallido</option>
+        </select>
+      </label>
+    </div>
+
+    <div id="videos-list" class="empty-state">Cargando tus videos…</div>
+    <div id="pagination" class="pagination" style="margin-top:20px;justify-content:center"></div>
+  </section>
+
+  <!-- Modal publicar como tema -->
+  <div id="publish-modal" class="modal-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h3 id="modal-title">Publicar como tema en un grupo</h3>
+        <button type="button" id="modal-close-x" class="secondary" style="border:0;padding:4px 8px;font-size:18px;min-height:auto;cursor:pointer" aria-label="Cerrar">&times;</button>
+      </div>
+      <p id="modal-video-name" class="hint" style="color:var(--blue);font-weight:700"></p>
+      <form id="publish-form" class="stack">
+        <div>
+          <label for="publish-group">Grupo académico</label>
+          <select id="publish-group" required></select>
+        </div>
+        <div>
+          <label for="publish-title">Título de la actividad / tema</label>
+          <input id="publish-title" type="text" required placeholder="Ej: Introducción a la fotosíntesis">
+        </div>
+        <div>
+          <label for="publish-desc">Orientaciones pedagógicas (opcional)</label>
+          <input id="publish-desc" type="text" placeholder="Instrucciones para los alumnos al ver el video">
+        </div>
+        <div class="actions two-actions" style="margin-top:14px">
+          <button type="button" id="modal-cancel" class="secondary btn-icon">
+            <svg class="ui-icon icon-close" aria-hidden="true" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            Cancelar
+          </button>
+          <button type="submit" id="modal-submit">Publicar tema →</button>
+        </div>
+      </form>
+    </div>
   </div>
-</div>
-</main><script type="module" src="/ui/videos/page.js"></script></body></html>
+</main>
+
+<script type="module" src="/ui/videos/page.js"></script>
+</body>
+</html>

@@ -165,6 +165,22 @@ function initYouTubePlayer(youtubeId, videoTitle = "") {
   }
 }
 
+/** Carga los detalles del video e inicializa el reproductor de YouTube. */
+async function loadVideoPlayer(vidId) {
+  if (!vidId) return;
+  try {
+    const video = await apiGetVideo(vidId);
+    if (video?.title && byId("video-label")) {
+      byId("video-label").textContent = `${video.title} (ID: ${vidId})`;
+    }
+    if (video?.youtube_id) {
+      initYouTubePlayer(video.youtube_id, video.title || "");
+    }
+  } catch (err) {
+    console.warn("No se pudo cargar la información del video para el reproductor:", err);
+  }
+}
+
 /** Renderiza el timestamp como un botón interactivo clickeable. */
 function renderTimestampButton(timestampStr, endStr = null) {
   const dataEnd = endStr ? ` data-end="${escapeHtml(endStr)}"` : "";
@@ -323,18 +339,101 @@ async function init() {
         navSteps.insertBefore(sep, navSteps.children[1]);
       }
 
-      if (topicMats?.summary) {
-        activeMaterialId = topicMats.summary.id;
-        materialId = topicMats.summary.id;
-        renderSummary(topicMats.summary.content);
-        updateExportVisibility(topicMats.summary.id);
+      const sharedSummary = topicMats?.shared_summary || topicMats?.summary;
+      const personalSummary = topicMats?.personal_summary;
+      const isAdmin = Boolean(topicMats?.is_admin);
 
-        const banner = document.createElement("div");
-        banner.className = "notice";
-        banner.style.borderLeft = "4px solid var(--blue)";
-        banner.style.marginBottom = "14px";
-        banner.innerHTML = `<strong>Resumen didáctico oficial del tema:</strong> ${escapeHtml(topicMats.title)} · <em>Material publicado por el docente para el grupo.</em>`;
-        byId("summary-output")?.parentNode.insertBefore(banner, byId("summary-output"));
+      // Activar pestañas de navegación (Resumen oficial vs Mi resumen personal)
+      const modeNav = byId("summary-mode-nav");
+      const tabShared = byId("tab-btn-summary-shared");
+      const tabPersonal = byId("tab-btn-summary-personal");
+      const genBtn = byId("generate-button");
+      const modelContainer = byId("model-selector-container");
+
+      if (modeNav && tabShared && tabPersonal) {
+        modeNav.style.display = "flex";
+
+        const setSummaryMode = (mode) => {
+          // Remover banner previo si existe
+          const oldBanner = document.getElementById("summary-mode-banner");
+          if (oldBanner) oldBanner.remove();
+
+          if (mode === "shared") {
+            tabShared.classList.add("active");
+            tabShared.style.color = "var(--ink)";
+            tabShared.style.borderBottom = "3px solid var(--blue)";
+            tabPersonal.classList.remove("active");
+            tabPersonal.style.color = "var(--muted)";
+            tabPersonal.style.borderBottom = "3px solid transparent";
+
+            if (sharedSummary) {
+              activeMaterialId = sharedSummary.id;
+              materialId = sharedSummary.id;
+              renderSummary(sharedSummary.content);
+              updateExportVisibility(sharedSummary.id);
+            } else {
+              activeMaterialId = null;
+              updateExportVisibility(null);
+              byId("summary-output").className = "empty-state";
+              byId("summary-output").textContent = "El docente aún no ha publicado un resumen oficial para este tema.";
+            }
+
+            const banner = document.createElement("div");
+            banner.id = "summary-mode-banner";
+            banner.className = "notice";
+            banner.style.borderLeft = "4px solid var(--blue)";
+            banner.style.marginBottom = "14px";
+            banner.innerHTML = `<strong>Resumen didáctico oficial del tema:</strong> ${escapeHtml(topicMats.title)} · <em>Material publicado por el docente para el grupo.</em>`;
+            byId("summary-output")?.parentNode.insertBefore(banner, byId("summary-output"));
+
+            // Si es estudiante, no puede generar ni sobrescribir el resumen oficial del docente
+            if (!isAdmin) {
+              if (genBtn) genBtn.style.display = "none";
+              if (modelContainer) modelContainer.style.display = "none";
+            } else {
+              if (genBtn) genBtn.style.display = "";
+              if (modelContainer) modelContainer.style.display = "";
+            }
+          } else {
+            // Modo Personal
+            tabPersonal.classList.add("active");
+            tabPersonal.style.color = "var(--ink)";
+            tabPersonal.style.borderBottom = "3px solid var(--blue)";
+            tabShared.classList.remove("active");
+            tabShared.style.color = "var(--muted)";
+            tabShared.style.borderBottom = "3px solid transparent";
+
+            if (personalSummary) {
+              activeMaterialId = personalSummary.id;
+              materialId = personalSummary.id;
+              renderSummary(personalSummary.content);
+              updateExportVisibility(personalSummary.id);
+            } else {
+              activeMaterialId = null;
+              updateExportVisibility(null);
+              byId("summary-output").className = "empty-state";
+              byId("summary-output").textContent = "Aún no has generado un resumen personal para este tema. Haz clic en 'Generar resumen' para crear tus propios apuntes.";
+            }
+
+            const banner = document.createElement("div");
+            banner.id = "summary-mode-banner";
+            banner.className = "notice";
+            banner.style.borderLeft = "4px solid #10b981";
+            banner.style.marginBottom = "14px";
+            banner.innerHTML = `<strong>Espacio de apuntes y resumen personal:</strong> ${escapeHtml(topicMats.title)} · <em>Tus notas y material generado independiente.</em>`;
+            byId("summary-output")?.parentNode.insertBefore(banner, byId("summary-output"));
+
+            // El alumno puede generar su propio resumen personal
+            if (genBtn) genBtn.style.display = "";
+            if (modelContainer) modelContainer.style.display = "";
+          }
+        };
+
+        tabShared.onclick = () => setSummaryMode("shared");
+        tabPersonal.onclick = () => setSummaryMode("personal");
+
+        // Cargar vista oficial por defecto
+        setSummaryMode("shared");
 
         if (topicMats.video_id) {
           videoId = topicMats.video_id;
@@ -400,17 +499,7 @@ async function init() {
   byId("quiz-link").href = urlFor("/ui/quiz/", { video: videoId });
   byId("material-link").href = urlFor("/ui/material/", { video: videoId });
 
-  try {
-    const video = await apiGetVideo(videoId);
-    if (video?.title) {
-      byId("video-label").textContent = `${video.title} (ID: ${videoId})`;
-    }
-    if (video?.youtube_id) {
-      initYouTubePlayer(video.youtube_id, video.title || "");
-    }
-  } catch (err) {
-    console.warn("No se pudo cargar la información del video:", err);
-  }
+  loadVideoPlayer(videoId);
 
   if (materialId) {
     try {

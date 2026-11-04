@@ -41,7 +41,7 @@ class VideoRepository:
         session.commit()
 
     def list_by_owner(
-        self, session: Session, owner_id: int, *, page: int = 1, page_size: int = 20, status: str | None = None
+        self, session: Session, owner_id: int, *, page: int = 1, page_size: int = 20, status: str | None = None, search: str | None = None, order: str = "desc"
     ) -> tuple[list[dict], int]:
         """Devuelve (items, total) para el historial paginado del usuario.
 
@@ -55,7 +55,11 @@ class VideoRepository:
         where = [(Video.owner_id == owner_id) | (Video.owner_id.is_(None))]
         if status:
             where.append(Video.status == status)
-        base_q = select(Video).where(*where).order_by(Video.created_at.desc())
+        if search and search.strip():
+            where.append(Video.title.ilike(f"%{search.strip()}%"))
+
+        order_col = Video.created_at.asc() if str(order).lower() == "asc" else Video.created_at.desc()
+        base_q = select(Video).where(*where).order_by(order_col)
         total = session.scalar(select(func.count()).select_from(Video).where(*where)) or 0
 
         videos = session.scalars(

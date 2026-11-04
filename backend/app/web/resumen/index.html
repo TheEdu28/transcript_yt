@@ -32,6 +32,16 @@
 
   <div id="notice" class="notice" role="status"></div>
 
+  <!-- Pestañas de modo para temas de grupo (Resumen oficial del docente vs Mi resumen personal) -->
+  <nav id="summary-mode-nav" class="group-tabs" role="tablist" style="display:none;margin-bottom:18px;border-bottom:2px solid var(--line);padding-bottom:0">
+    <button type="button" class="group-tab-btn active" id="tab-btn-summary-shared" data-mode="shared" style="border-radius:8px 8px 0 0;padding:10px 18px;background:none;border:none;color:var(--ink);font-weight:700;border-bottom:3px solid var(--blue);cursor:pointer">
+      Resumen oficial del docente
+    </button>
+    <button type="button" class="group-tab-btn" id="tab-btn-summary-personal" data-mode="personal" style="border-radius:8px 8px 0 0;padding:10px 18px;background:none;border:none;color:var(--muted);font-weight:700;border-bottom:3px solid transparent;cursor:pointer">
+      Mi resumen personal
+    </button>
+  </nav>
+
   <!-- Reproductor de YouTube embebido -->
   <section class="panel" id="player-panel" style="margin-bottom:18px;display:none">
     <div class="panel-heading">

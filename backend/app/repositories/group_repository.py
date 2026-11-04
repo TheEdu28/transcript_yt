@@ -224,14 +224,16 @@ class GroupRepository:
         self, session: Session, attempt: Attempt, final_score: float, review_notes: str | None = None
     ) -> Attempt:
         attempt.final_score = round(final_score, 2)
-        if review_notes is not None:
-            try:
-                data = json.loads(attempt.answers_json) if attempt.answers_json else {}
-                if isinstance(data, dict):
-                    data["review_notes"] = review_notes
-                    attempt.answers_json = json.dumps(data, ensure_ascii=False)
-            except Exception:
-                pass
+        try:
+            data = json.loads(attempt.answers_json) if attempt.answers_json else {}
+            if not isinstance(data, dict):
+                data = {"raw_answers": data}
+            data["evaluated"] = True
+            if review_notes is not None:
+                data["review_notes"] = review_notes
+            attempt.answers_json = json.dumps(data, ensure_ascii=False)
+        except Exception:
+            pass
         session.commit()
         session.refresh(attempt)
         return attempt

@@ -432,11 +432,54 @@ contenido ni timestamps."""
         )
         video = self.repository.get(session, video_id)
         effective_owner = owner_id if owner_id is not None else (video.owner_id if video else None)
+        parsed_quiz = parse_grounded_quiz(raw_response, evidence, multiple_choice_count, open_question_count, bloom_levels)
+        if video and video.youtube_id:
+            try:
+                from app.services.timestamp_service import TimestampCalibrationService
+                segments = TimestampCalibrationService.load_raw_segments(
+                    video.youtube_id,
+                    base_dir=getattr(self.settings, "raw_transcripts_directory", None),
+                )
+                if not segments and getattr(video, "transcript_path", None):
+                    tp = Path(video.transcript_path)
+                    if tp.exists():
+                        try:
+                            raw_data = json.loads(tp.read_text(encoding="utf-8"))
+                            segments = raw_data if isinstance(raw_data, list) else raw_data.get("segments", [])
+                        except Exception as read_err:
+                            logger.warning(
+                                "Failed to read transcript from video.transcript_path %s: %s",
+                                tp,
+                                read_err,
+                            )
+                if segments:
+                    calibrator = TimestampCalibrationService()
+                    calibrated_dict = calibrator.calibrate_quiz(parsed_quiz.model_dump(), segments)
+                    parsed_quiz = QuizResponse.model_validate(calibrated_dict)
+                    logger.info(
+                        "Successfully calibrated quiz timestamps for video %s (%s).",
+                        video_id,
+                        video.youtube_id,
+                    )
+                else:
+                    logger.warning(
+                        "No transcript segments found for video %s (%s); quiz generated with uncalibrated timestamps.",
+                        video_id,
+                        video.youtube_id,
+                    )
+            except Exception as err:
+                logger.error(
+                    "Error calibrating quiz timestamps for video %s (%s): %s. Falling back to uncalibrated quiz.",
+                    video_id,
+                    video.youtube_id,
+                    err,
+                    exc_info=True,
+                )
         return MaterialService().save_generated(
             session,
             video_id,
             "quiz",
-            parse_grounded_quiz(raw_response, evidence, multiple_choice_count, open_question_count, bloom_levels),
+            parsed_quiz,
             owner_id=effective_owner,
         )
 

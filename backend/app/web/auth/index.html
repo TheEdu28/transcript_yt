@@ -1,26 +1,74 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Acceso · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
-<body><main class="shell auth-shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1>Aula<span>Video</span></h1></div></header>
-<section class="panel accent-panel auth-panel">
-  <div id="notice" class="notice" role="status" style="display:none"></div>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acceso · AulaVideo</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+<main class="shell auth-shell">
+  <header class="hero" style="text-align:center;display:block;margin-bottom:24px">
+    <p class="eyebrow">AULAVIDEO</p>
+    <h1>Aula<span>Video</span></h1>
+    <p class="hero-subtitle" style="margin:8px auto 0">Transforma videos educativos de YouTube en resúmenes, glosarios y cuestionarios interactivos con IA fundamentada.</p>
+  </header>
 
-  <form id="login-form" class="stack auth-form">
-    <label>Correo electrónico<input id="login-email" type="email" required autocomplete="email" placeholder="tu@correo.com"></label>
-    <label>Contraseña<input id="login-password" type="password" required autocomplete="current-password" placeholder="••••••••"></label>
-    <div class="auth-actions" role="tablist" aria-label="Acceso">
-      <button class="auth-choice auth-choice--active" type="submit" id="login-btn" data-tab="login" role="tab" aria-selected="true">Iniciar sesión</button>
-      <button class="auth-choice secondary" type="button" data-tab="register" role="tab" aria-selected="false">Registrarse</button>
+  <section class="panel accent-panel auth-panel">
+    <!-- Pestañas de alternancia arriba del formulario -->
+    <div class="auth-tabs" role="tablist" aria-label="Tipo de acceso">
+      <button type="button" id="tab-login" class="auth-tab-btn auth-tab-btn--active" role="tab" aria-selected="true" aria-controls="login-form">
+        Iniciar sesión
+      </button>
+      <button type="button" id="tab-register" class="auth-tab-btn" role="tab" aria-selected="false" aria-controls="register-form">
+        Registrarse
+      </button>
     </div>
-  </form>
 
-  <form id="register-form" class="stack auth-form" style="display:none">
-    <label>Nombre<input id="reg-name" type="text" required autocomplete="name" placeholder="Tu nombre"></label>
-    <label>Correo electrónico<input id="reg-email" type="email" required autocomplete="email" placeholder="tu@correo.com"></label>
-    <label>Contraseña<input id="reg-password" type="password" required autocomplete="new-password" placeholder="Mínimo 8 caracteres"></label>
-    <div class="auth-actions" role="tablist" aria-label="Acceso">
-      <button class="auth-choice secondary" type="button" data-tab="login" role="tab" aria-selected="false">Iniciar sesión</button>
-      <button class="auth-choice auth-choice--active" id="register-btn" type="submit" data-tab="register" role="tab" aria-selected="true">Registrarse</button>
-    </div>
-  </form>
-</section>
-</main><script type="module" src="/ui/auth/page.js"></script></body></html>
+    <div id="notice" class="notice" role="status" style="display:none"></div>
+
+    <!-- Formulario de Inicio de Sesión -->
+    <form id="login-form" class="stack auth-form">
+      <div>
+        <label for="login-email">Correo electrónico</label>
+        <input id="login-email" type="email" required autocomplete="email" placeholder="tu@correo.com">
+      </div>
+      <div>
+        <label for="login-password">Contraseña</label>
+        <input id="login-password" type="password" required autocomplete="current-password" placeholder="••••••••">
+      </div>
+      <button id="login-btn" class="auth-submit-btn" type="submit">
+        Iniciar sesión →
+      </button>
+      <p style="text-align:center;margin:8px 0 0;font-size:12.5px;color:var(--muted)">
+        ¿Aún no tienes cuenta? <button type="button" id="goto-register-link" class="secondary" style="display:inline;border:none;background:none;color:var(--blue);font-weight:700;padding:0;min-height:auto;cursor:pointer;text-decoration:underline">Regístrate gratis</button>
+      </p>
+    </form>
+
+    <!-- Formulario de Registro -->
+    <form id="register-form" class="stack auth-form" style="display:none">
+      <div>
+        <label for="reg-name">Nombre completo</label>
+        <input id="reg-name" type="text" required autocomplete="name" placeholder="Tu nombre o apodo docente">
+      </div>
+      <div>
+        <label for="reg-email">Correo electrónico</label>
+        <input id="reg-email" type="email" required autocomplete="email" placeholder="tu@correo.com">
+      </div>
+      <div>
+        <label for="reg-password">Contraseña</label>
+        <input id="reg-password" type="password" required autocomplete="new-password" placeholder="Mínimo 8 caracteres">
+      </div>
+      <button id="register-btn" class="auth-submit-btn" type="submit">
+        Crear cuenta y acceder →
+      </button>
+      <p style="text-align:center;margin:8px 0 0;font-size:12.5px;color:var(--muted)">
+        ¿Ya tienes cuenta? <button type="button" id="goto-login-link" class="secondary" style="display:inline;border:none;background:none;color:var(--blue);font-weight:700;padding:0;min-height:auto;cursor:pointer;text-decoration:underline">Inicia sesión</button>
+      </p>
+    </form>
+  </section>
+</main>
+
+<script type="module" src="/ui/auth/page.js"></script>
+</body>
+</html>

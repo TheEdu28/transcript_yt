@@ -31,7 +31,7 @@ from app.services.grading_service import (
     compute_final_score,
     compute_member_topic_summary,
 )
-from app.services.material_service import MaterialService
+from app.services.material_service import MaterialService, mask_quiz_answers
 
 
 class GroupService:
@@ -298,11 +298,15 @@ class GroupService:
             if ps:
                 personal_summary = svc._as_response(session, ps.id, ps.video_id, ps.material_type, ps.content_json)
 
+        is_admin = (current_user.id == group.admin_id)
+        if not is_admin and shared_quiz is not None and isinstance(shared_quiz.content, dict):
+            shared_quiz.content = mask_quiz_answers(shared_quiz.content)
+
         return TopicMaterialsResponse(
             topic_id=topic.id,
             video_id=topic.video_id,
             title=topic.title,
-            is_admin=(current_user.id == group.admin_id),
+            is_admin=is_admin,
             shared_quiz=shared_quiz,
             shared_summary=shared_summary,
             personal_quiz=personal_quiz,

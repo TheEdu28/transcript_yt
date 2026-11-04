@@ -11,6 +11,22 @@ from app.repositories.material_repository import MaterialRepository
 from app.schemas.contracts import MaterialResponse, QuizResponse, SummaryResponse
 
 
+def mask_quiz_answers(content: dict[str, Any]) -> dict[str, Any]:
+    """Elimina las respuestas correctas, explicaciones y puntos esperados de un cuestionario."""
+    import copy
+    masked = copy.deepcopy(content)
+    if "multiple_choice" in masked and isinstance(masked["multiple_choice"], list):
+        for q in masked["multiple_choice"]:
+            if isinstance(q, dict):
+                q.pop("correct_option", None)
+                q.pop("explanation", None)
+    if "open_questions" in masked and isinstance(masked["open_questions"], list):
+        for q in masked["open_questions"]:
+            if isinstance(q, dict):
+                q.pop("expected_points", None)
+    return masked
+
+
 class MaterialService:
     """Valida el contenido antes de persistir cualquier edición del estudiante."""
 
@@ -87,9 +103,13 @@ class MaterialService:
         )
 
     def can_edit(self, session: Session, material_id: int, user_id: int) -> bool:
-        """Return whether a user owns the source video or administers its published group topic."""
+        """Return whether a user owns the material (personal), owns the video, or administers its group."""
         material = self.repository.get(session, material_id)
-        return material is not None and self.repository.is_video_owner_or_published_group_admin(session, material, user_id)
+        if not material:
+            return False
+        if material.owner_id is not None and material.owner_id == user_id:
+            return True
+        return self.repository.is_video_owner_or_published_group_admin(session, material, user_id)
 
     def _as_response(self, session: Session, material_id: int, video_id: int, material_type: str, content_json: str) -> MaterialResponse:
         """Deserialize persisted JSON through its original Pydantic contract."""

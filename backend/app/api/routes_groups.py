@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.dependencies_auth import require_group_admin, require_group_member
@@ -288,17 +288,37 @@ def get_my_attempts(
 @router.get("/{group_id}/topics/{topic_id}/attempts", response_model=list[AdminAttemptResponse])
 def get_all_attempts(
     topic_id: int,
+    user_id: int | None = Query(default=None),
     group: Group = Depends(require_group_admin),
     session: Session = Depends(get_session),
 ) -> list[Attempt]:
-    """SOLO admin: devuelve todos los intentos de todos los miembros del tema."""
+    """SOLO admin: devuelve todos los intentos del tema, opcionalmente filtrados por alumno."""
     topic = repo.get_topic(session, topic_id)
     if not topic or topic.group_id != group.id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "TOPIC_NOT_FOUND", "message": "El tema no existe en este grupo."},
         )
+    if user_id is not None:
+        return repo.list_user_attempts(session, topic.id, user_id)
     return repo.list_all_topic_attempts(session, topic.id)
+
+
+@router.get("/{group_id}/topics/{topic_id}/members/{user_id}/attempts", response_model=list[AdminAttemptResponse])
+def get_member_attempts_for_admin(
+    topic_id: int,
+    user_id: int,
+    group: Group = Depends(require_group_admin),
+    session: Session = Depends(get_session),
+) -> list[Attempt]:
+    """SOLO admin: consulta los intentos individuales de un alumno específico en esta actividad."""
+    topic = repo.get_topic(session, topic_id)
+    if not topic or topic.group_id != group.id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "TOPIC_NOT_FOUND", "message": "El tema no existe en este grupo."},
+        )
+    return repo.list_user_attempts(session, topic.id, user_id)
 
 
 @router.get("/{group_id}/topics/{topic_id}/summary", response_model=TopicSummaryResponse)

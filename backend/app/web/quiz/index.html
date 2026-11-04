@@ -82,14 +82,14 @@
       Personaliza los niveles cognitivos de Bloom y la cantidad de preguntas para generar tu cuestionario personal.
     </p>
     <fieldset class="bloom-fieldset">
-      <legend>Niveles de Bloom</legend>
+      <legend>Niveles cognitivos (Taxonomía de Bloom)</legend>
       <div class="bloom-options">
-        <label><input type="checkbox" value="remember" checked> Recordar</label>
-        <label><input type="checkbox" value="understand" checked> Comprender</label>
-        <label><input type="checkbox" value="apply" checked> Aplicar</label>
-        <label><input type="checkbox" value="analyze"> Analizar</label>
-        <label><input type="checkbox" value="evaluate"> Evaluar</label>
-        <label><input type="checkbox" value="create"> Crear</label>
+        <label title="Datos, hechos y definiciones directas del video"><input type="checkbox" value="remember" checked> Recordar</label>
+        <label title="Explicación de conceptos y significado principal"><input type="checkbox" value="understand" checked> Comprender</label>
+        <label title="Uso del conocimiento en situaciones o ejercicios nuevos"><input type="checkbox" value="apply" checked> Aplicar</label>
+        <label title="Desglose de partes y relaciones lógicas"><input type="checkbox" value="analyze"> Analizar</label>
+        <label title="Juicio crítico fundamentado y comprobación"><input type="checkbox" value="evaluate"> Evaluar</label>
+        <label title="Síntesis e integración de nuevos enfoques"><input type="checkbox" value="create"> Crear</label>
       </div>
     </fieldset>
     <div class="count-row">
@@ -113,9 +113,21 @@
       <h2 id="output-panel-title">Cuestionario</h2>
     </div>
 
+    <!-- Selector visual de versiones para el docente (Con respuestas vs Sin respuestas) -->
+    <div id="teacher-quiz-version-toggle" style="display:none;align-items:center;justify-content:space-between;margin-bottom:14px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:10px;padding:10px 16px;flex-wrap:wrap;gap:10px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:13px;font-weight:700;color:var(--blue)">Modo de visualización docente:</span>
+        <span style="font-size:12px;color:var(--muted)">Alterna entre la pauta completa y la vista previa del alumno.</span>
+      </div>
+      <div style="display:inline-flex;border-radius:8px;overflow:hidden;border:1px solid var(--blue)">
+        <button type="button" id="toggle-quiz-with-answers" class="btn-toggle-quiz active" style="padding:6px 14px;font-size:12.5px;background:var(--blue);color:#fff;border:none;cursor:pointer;font-weight:700">Versión con respuestas</button>
+        <button type="button" id="toggle-quiz-without-answers" class="btn-toggle-quiz" style="padding:6px 14px;font-size:12.5px;background:#fff;color:var(--blue);border:none;cursor:pointer;font-weight:700">Versión sin respuestas</button>
+      </div>
+    </div>
+
     <!-- Acciones de exportación -->
     <div id="quiz-export-actions" class="export-group" style="display:none;margin-bottom:16px;background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px 16px;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div id="export-mode-container" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span style="font-size:13px;font-weight:700;color:#334155">Contenido de exportación:</span>
         <select id="export-mode-select" style="font-size:12px;padding:6px 10px;border-radius:8px;border:1px solid #cbd5e1;background:#fff;font-weight:600">
           <option value="false" selected>Solo preguntas (sin contestar / sin respuestas)</option>

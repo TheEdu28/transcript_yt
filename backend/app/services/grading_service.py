@@ -111,6 +111,8 @@ def compute_member_topic_summary(
             "latest_attempt": None,
             "average_final_score": None,
             "average_raw_score": None,
+            "status": "not_submitted",
+            "final_score": None,
         }
 
     total = len(attempts)
@@ -129,6 +131,8 @@ def compute_member_topic_summary(
         "latest_attempt": latest_attempt,
         "average_final_score": avg_final,
         "average_raw_score": avg_raw,
+        "status": "evaluated",
+        "final_score": latest_attempt.final_score if latest_attempt else None,
     }
 
 

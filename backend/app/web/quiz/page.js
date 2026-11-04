@@ -104,7 +104,66 @@ function updateExportVisibility(matId) {
   if (bar) {
     bar.style.display = matId ? "flex" : "none";
   }
+  const modeContainer = byId("export-mode-container");
+  if (modeContainer) {
+    modeContainer.style.display = isAdmin ? "flex" : "none";
+  }
 }
+
+function maskQuizClient(quiz) {
+  if (!quiz) return quiz;
+  return {
+    ...quiz,
+    multiple_choice: (quiz.multiple_choice || []).map((q) => {
+      const { correct_option, explanation, ...rest } = q;
+      return rest;
+    }),
+    open_questions: (quiz.open_questions || []).map((q) => {
+      const { expected_points, ...rest } = q;
+      return rest;
+    }),
+  };
+}
+
+function setupTeacherQuizViewToggle(rawQuiz) {
+  const toggleBox = byId("teacher-quiz-version-toggle");
+  const btnWith = byId("toggle-quiz-with-answers");
+  const btnWithout = byId("toggle-quiz-without-answers");
+  const exportSelect = byId("export-mode-select");
+
+  if (!toggleBox || !btnWith || !btnWithout) return;
+
+  toggleBox.style.display = "flex";
+
+  const setView = (withAnswers) => {
+    if (withAnswers) {
+      btnWith.classList.add("active");
+      btnWith.style.background = "var(--blue)";
+      btnWith.style.color = "#fff";
+      btnWithout.classList.remove("active");
+      btnWithout.style.background = "#fff";
+      btnWithout.style.color = "var(--blue)";
+      if (exportSelect) exportSelect.value = "true";
+      renderQuizForAdmin(rawQuiz);
+    } else {
+      btnWithout.classList.add("active");
+      btnWithout.style.background = "var(--blue)";
+      btnWithout.style.color = "#fff";
+      btnWith.classList.remove("active");
+      btnWith.style.background = "#fff";
+      btnWith.style.color = "var(--blue)";
+      if (exportSelect) exportSelect.value = "false";
+      renderQuizForStudent(maskQuizClient(rawQuiz), false);
+      const fb = byId("feedback-button");
+      if (fb) fb.style.display = "none";
+    }
+  };
+
+  btnWith.onclick = () => setView(true);
+  btnWithout.onclick = () => setView(false);
+  setView(true);
+}
+
 
 // =============================================================================
 // Renderizado de Cuestionario para ESTUDIANTE (Solo responder)
@@ -336,7 +395,7 @@ function setupExportHandlers() {
       showNotice("Primero debes generar o cargar un cuestionario.", "error");
       return;
     }
-    const includeAnswers = byId("export-mode-select")?.value === "true";
+    const includeAnswers = Boolean(isAdmin && byId("export-mode-select")?.value === "true");
     const modeLabel = includeAnswers ? "con respuestas" : "solo preguntas";
     showNotice(`Generando archivo ${format.toUpperCase()} (${modeLabel})…`, "info");
     try {
@@ -664,6 +723,7 @@ byId("feedback-button")?.addEventListener("click", async () => {
 
       byId("feedback-output").innerHTML = scoreBanner + (closed + open || "No hubo respuestas para revisar.");
       showNotice("Evaluación completada con éxito.", "success");
+      byId("feedback-output")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
       showNotice(error.message, "error");
     }
@@ -711,8 +771,7 @@ async function init() {
 
       if (isAdmin) {
         // VISTA ADMINISTRADOR / PROFESOR:
-        // Solo ve el cuestionario oficial con respuestas correctas
-        // No ve pestañas de miembro, no puede autocalificarse, no ve configurar cuestionario
+        // Selector visual entre "Versión con respuestas" y "Versión sin respuestas"
         byId("quiz-mode-nav").style.display = "none";
         byId("personal-quiz-bar").style.display = "none";
         byId("config-panel").style.display = "none";
@@ -720,7 +779,7 @@ async function init() {
 
         if (sharedQuiz) {
           activeMaterialId = sharedQuiz.id;
-          renderQuizForAdmin(sharedQuiz.content);
+          setupTeacherQuizViewToggle(sharedQuiz.content);
           updateExportVisibility(sharedQuiz.id);
           showNotice(`Pauta de evaluación del tema cargada.`, "info");
         } else {
@@ -730,7 +789,9 @@ async function init() {
         return;
       } else {
         // VISTA ESTUDIANTE / MIEMBRO:
-        // Separación: Cuestionario del profesor vs Mis cuestionarios propios
+        // Cuestionario del profesor (sin respuestas) vs Mis cuestionarios propios
+        const toggleBox = byId("teacher-quiz-version-toggle");
+        if (toggleBox) toggleBox.style.display = "none";
         byId("quiz-mode-nav").style.display = "flex";
         byId("config-panel").style.display = "none"; // Configurar solo sale al crear uno propio
 

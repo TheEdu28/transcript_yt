@@ -1,65 +1,123 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Material · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
-<body><main class="shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1>Editar material</h1><p id="video-label" class="lede"></p></div><div id="user-bar" class="user-bar"></div></header>
-<nav class="steps" aria-label="Flujo"><a href="/ui/video/">Ingesta</a><i></i><a id="summary-link" href="/ui/resumen/">Resumen</a><i></i><a id="quiz-link" href="/ui/quiz/">Cuestionario</a><i></i><span>Materiales</span></nav>
-<div id="notice" class="notice" role="status"></div>
-<p id="last-editor" class="material-last-editor"></p>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Material didáctico · AulaVideo</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">AULAVIDEO</p>
+      <h1>Editar <span>material</span></h1>
+      <p id="video-label" class="lede"></p>
+    </div>
+    <div id="user-bar" class="user-bar"></div>
+  </header>
 
-<section class="panel">
-  <div class="panel-heading"><p class="number">04</p><h2>Cargar y exportar material</h2></div>
-  <div style="margin-bottom:14px;max-width:560px">
-    <label style="font-weight:600;font-size:13px;display:block">Seleccionar de mis materiales generados:
-      <select id="material-select" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--line);margin-top:4px">
+  <nav class="steps" aria-label="Flujo de trabajo">
+    <a href="/ui/video/">1. Ingesta</a><i></i>
+    <a id="summary-link" href="/ui/resumen/">2. Resumen</a><i></i>
+    <a id="quiz-link" href="/ui/quiz/">3. Cuestionario</a><i></i>
+    <span>4. Materiales</span>
+  </nav>
+
+  <div id="notice" class="notice" role="status"></div>
+  <p id="last-editor" class="material-last-editor"></p>
+
+  <section class="panel accent-panel">
+    <div class="panel-heading">
+      <p class="number">04</p>
+      <h2>Cargar y exportar material</h2>
+    </div>
+    <p class="hint">Selecciona cualquier material generado en tu cuenta para editar su contenido, revisar preguntas o exportarlo a múltiples formatos.</p>
+
+    <div style="margin-bottom:16px;max-width:580px">
+      <label for="material-select">Seleccionar de mis materiales generados:</label>
+      <select id="material-select" style="margin-top:6px">
         <option value="">Cargando lista de materiales…</option>
       </select>
-    </label>
-  </div>
-  <div class="actions" style="max-width:560px;display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
-    <label style="flex:1;min-width:140px">O escribir Material ID<input id="material-id" type="number" min="1" placeholder="Ej: 1"></label>
-    <button id="load-button" type="button" class="secondary">Cargar</button>
-    <button id="export-md-btn" type="button" class="export-btn export-btn--md" title="Descargar como Markdown"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg> Markdown</button>
-    <button id="export-pdf-btn" type="button" class="export-btn export-btn--pdf" title="Descargar como PDF"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13v4"/><path d="M9 13h2a1.5 1.5 0 0 1 0 3H9"/></svg> PDF</button>
-    <button id="export-docx-btn" type="button" class="export-btn export-btn--docx" title="Descargar como Word (.docx)"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="8 13 9.5 17 11 13 12.5 17 14 13"/></svg> Word (.docx)</button>
-  </div>
-</section>
-
-<!-- Visualizador de cuestionario -->
-<section class="panel" id="quiz-viewer" style="margin-top:18px;display:none">
-  <div class="panel-heading"><p class="number">CUESTIONARIO</p><h2 id="quiz-viewer-title">Preguntas del cuestionario</h2></div>
-  <div id="quiz-viewer-content" class="stack" style="gap:16px;margin-top:16px"></div>
-</section>
-
-<!-- Formulario estructurado (solo resumen) -->
-<section class="panel" id="summary-editor" style="margin-top:18px;display:none">
-  <div class="panel-heading"><p class="number">RESUMEN</p><h2>Editar contenido</h2></div>
-
-  <label>Sinopsis<textarea id="field-synopsis" rows="4" maxlength="1400" placeholder="Resumen en menos de 200 palabras…"></textarea></label>
-
-  <div style="margin-top:20px">
-    <div class="editor-section-head">
-      <strong>Glosario</strong>
-      <button type="button" id="add-glossary" class="secondary" style="padding:4px 10px;font-size:12px">+ Agregar término</button>
     </div>
-    <div id="glossary-items" class="editor-list"></div>
-  </div>
 
-  <div style="margin-top:20px">
-    <div class="editor-section-head">
-      <strong>Bloques didácticos</strong>
-      <button type="button" id="add-block" class="secondary" style="padding:4px 10px;font-size:12px">+ Agregar bloque</button>
+    <div class="actions" style="max-width:680px;display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:1;min-width:140px">
+        <label for="material-id">O escribir Material ID</label>
+        <input id="material-id" type="number" min="1" placeholder="Ej: 1">
+      </div>
+      <button id="load-button" type="button" class="secondary" style="height:40px">Cargar</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="export-md-btn" type="button" class="export-btn export-btn--md" title="Descargar como Markdown">
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          Markdown
+        </button>
+        <button id="export-pdf-btn" type="button" class="export-btn export-btn--pdf" title="Descargar como PDF">
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13v4"/><path d="M9 13h2a1.5 1.5 0 0 1 0 3H9"/></svg>
+          PDF
+        </button>
+        <button id="export-docx-btn" type="button" class="export-btn export-btn--docx" title="Descargar como Word (.docx)">
+          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><polyline points="8 13 9.5 17 11 13 12.5 17 14 13"/></svg>
+          Word (.docx)
+        </button>
+      </div>
     </div>
-    <div id="block-items" class="editor-list"></div>
-  </div>
+  </section>
 
-  <div class="actions two-actions" style="margin-top:20px;max-width:400px">
-    <button id="save-button" type="button">Guardar edición</button>
-    <button id="versions-button" type="button" class="secondary">Ver historial</button>
-  </div>
-</section>
+  <!-- Visualizador de cuestionario -->
+  <section class="panel" id="quiz-viewer" style="margin-top:18px;display:none">
+    <div class="panel-heading">
+      <p class="number">CUESTIONARIO</p>
+      <h2 id="quiz-viewer-title">Preguntas del cuestionario</h2>
+    </div>
+    <div id="quiz-viewer-content" class="stack" style="gap:16px;margin-top:16px"></div>
+  </section>
 
-<!-- Historial de versiones -->
-<section class="panel" id="versions-panel" style="margin-top:18px;display:none">
-  <div class="panel-heading"><p class="number">HISTORIAL</p><h2>Versiones guardadas</h2></div>
-  <div id="versions-list" class="empty-state">Sin versiones anteriores.</div>
-</section>
-</main><script type="module" src="/ui/material/page.js"></script></body></html>
+  <!-- Formulario estructurado (solo resumen) -->
+  <section class="panel" id="summary-editor" style="margin-top:18px;display:none">
+    <div class="panel-heading">
+      <p class="number">RESUMEN</p>
+      <h2>Editar contenido didáctico</h2>
+    </div>
+
+    <div>
+      <label for="field-synopsis">Sinopsis general</label>
+      <textarea id="field-synopsis" rows="4" maxlength="1400" placeholder="Resumen en menos de 200 palabras…"></textarea>
+    </div>
+
+    <div style="margin-top:20px">
+      <div class="editor-section-head">
+        <strong>Glosario de conceptos</strong>
+        <button type="button" id="add-glossary" class="secondary" style="padding:4px 12px;font-size:12px;min-height:auto">+ Agregar término</button>
+      </div>
+      <div id="glossary-items" class="editor-list"></div>
+    </div>
+
+    <div style="margin-top:20px">
+      <div class="editor-section-head">
+        <strong>Bloques didácticos estructurados</strong>
+        <button type="button" id="add-block" class="secondary" style="padding:4px 12px;font-size:12px;min-height:auto">+ Agregar bloque</button>
+      </div>
+      <div id="block-items" class="editor-list"></div>
+    </div>
+
+    <div class="actions two-actions" style="margin-top:24px;max-width:440px">
+      <button id="save-button" type="button">Guardar cambios</button>
+      <button id="versions-button" type="button" class="secondary">Ver historial de versiones</button>
+    </div>
+  </section>
+
+  <!-- Historial de versiones -->
+  <section class="panel" id="versions-panel" style="margin-top:18px;display:none">
+    <div class="panel-heading">
+      <p class="number">HISTORIAL</p>
+      <h2>Versiones guardadas</h2>
+    </div>
+    <p class="hint">Cada vez que guardas una edición, el estado anterior queda respaldado aquí y puede ser restaurado con un clic.</p>
+    <div id="versions-list" class="empty-state">Sin versiones anteriores registradas.</div>
+  </section>
+</main>
+
+<script type="module" src="/ui/material/page.js"></script>
+</body>
+</html>

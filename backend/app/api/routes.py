@@ -21,7 +21,7 @@ from app.schemas.contracts import (
 from app.services.auth_service import get_current_user, get_optional_current_user
 from app.services.export_service import ExportService
 from app.services.feedback_service import FeedbackService
-from app.services.material_service import MaterialService
+from app.services.material_service import MaterialService, mask_quiz_answers
 from app.services.pipeline import PipelineService
 from app.services.providers import list_available_models, list_available_providers
 
@@ -63,11 +63,15 @@ def list_my_videos(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     status: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    order: str = Query(default="desc"),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> VideoHistoryResponse:
     """Historial paginado de videos ingestados por el usuario autenticado."""
-    items, total = VideoRepository().list_by_owner(session, current_user.id, page=page, page_size=page_size, status=status)
+    items, total = VideoRepository().list_by_owner(
+        session, current_user.id, page=page, page_size=page_size, status=status, search=search, order=order
+    )
     return VideoHistoryResponse(items=items, total=total, page=page, page_size=page_size)
 
 
@@ -258,10 +262,24 @@ def list_my_materials(
 
 
 @router.get("/materials/{material_id}", response_model=MaterialResponse)
-def get_material(material_id: int, session: Session = Depends(get_session)) -> MaterialResponse:
+def get_material(
+    material_id: int,
+    current_user: User | None = Depends(get_optional_current_user),
+    session: Session = Depends(get_session),
+) -> MaterialResponse:
     """HU-06: consult a generated material before deciding whether to edit it."""
     try:
-        return MaterialService().get(session, material_id)
+        svc = MaterialService()
+        resp = svc.get(session, material_id)
+        if resp.material_type == "quiz":
+            mat = svc.repository.get(session, material_id)
+            is_privileged = False
+            if current_user and mat:
+                if svc.repository.is_video_owner_or_published_group_admin(session, mat, current_user.id):
+                    is_privileged = True
+            if not is_privileged and isinstance(resp.content, dict):
+                resp.content = mask_quiz_answers(resp.content)
+        return resp
     except PipelineError as error:
         raise_http(error)
 
@@ -347,11 +365,28 @@ def export_material(
     material_id: int,
     format: ExportFormat = "markdown",
     include_answers: bool = Query(default=False),
+    current_user: User | None = Depends(get_optional_current_user),
     session: Session = Depends(get_session),
 ) -> FileResponse:
     """HU-07: create and download a local JSON, Markdown, PDF or DOCX version."""
+    svc = MaterialService()
+    mat = svc.repository.get(session, material_id)
+    if not mat:
+        raise_http(PipelineError("El material no existe.", code="MATERIAL_NOT_FOUND", status_code=404))
+
+    if mat.material_type == "quiz" and include_answers:
+        is_privileged = False
+        if current_user:
+            if svc.repository.is_video_owner_or_published_group_admin(session, mat, current_user.id):
+                is_privileged = True
+        if not is_privileged:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={"code": "FORBIDDEN_STUDENT_ANSWERS", "message": "Los estudiantes no pueden exportar el cuestionario con respuestas."}
+            )
+
     try:
-        material = MaterialService().get(session, material_id)
+        material = svc._as_response(session, mat.id, mat.video_id, mat.material_type, mat.content_json)
         path = ExportService(get_settings()).export(material, format, include_answers=include_answers)
     except PipelineError as error:
         raise_http(error)

@@ -6,6 +6,8 @@ import {
   apiGetGroup,
   apiGetGroupGrades,
   apiGetMyTopicAttempts,
+  apiGetTopicStudentAttempts,
+  apiGetTopicSummary,
   apiListGroupMembers,
   apiListMyVideos,
   apiListTopics,
@@ -16,12 +18,14 @@ import {
   auth,
 } from "/ui/api.js";
 import {
+  confirmModal,
   escapeHtml,
   getPositiveIntParam,
   renderUserBar,
   requireAuth,
   runWithButtonDisabled,
   showNotice,
+  showToast,
   urlFor,
 } from "/ui/shared.js";
 
@@ -93,6 +97,8 @@ document.querySelectorAll(".group-tab-btn").forEach((btn) => {
 function renderGroupCode(code) {
   const codeTag = byId("group-code-tag");
   if (codeTag) codeTag.textContent = code;
+  const viewCode = byId("members-view-code");
+  if (viewCode) viewCode.textContent = code;
 }
 
 // ==========================================
@@ -209,16 +215,24 @@ function renderTopics(topics) {
       const trashIcon = `<svg class="ui-icon icon-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 
       const quizLabel = isAdmin ? "Ver cuestionario (respuestas)" : "Realizar evaluación";
+      const gradeBtn = isAdmin
+        ? `<button type="button" class="btn-grade-activity" data-topic-id="${t.id}" data-topic-title="${escapeHtml(t.title)}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;font-size:13px;font-weight:700;color:#065f46;cursor:pointer">
+             <svg class="ui-icon" viewBox="0 0 24 24" style="color:#10b981;width:16px;height:16px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+             Calificar actividad
+           </button>`
+        : "";
+
       const videoLinks = t.video_id
-        ? `<div class="topic-links" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+        ? `<div class="topic-links" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center">
              <a href="${urlFor("/ui/resumen/", resumenParams)}" class="topic-link" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#f0f5ff;border:1px solid #c9d5fa;border-radius:8px;font-size:13px;font-weight:700;color:var(--blue);text-decoration:none">
                ${bookIcon} Resumen didáctico ${t.summary_id ? checkIcon : ''}
              </a>
              <a href="${urlFor("/ui/quiz/", quizParams)}" class="topic-link" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#f5f0ff;border:1px solid #d8c9fa;border-radius:8px;font-size:13px;font-weight:700;color:var(--violet);text-decoration:none">
                ${editIcon} ${quizLabel} ${quizId ? checkIcon : ''}
              </a>
+             ${gradeBtn}
            </div>`
-        : `<p class="topic-no-video" style="margin:10px 0 0;font-size:12px;color:var(--muted)">Sin video asignado</p>`;
+        : `<div style="display:flex;gap:10px;margin-top:10px;align-items:center">${gradeBtn}<p class="topic-no-video" style="margin:0;font-size:12px;color:var(--muted)">Sin video asignado</p></div>`;
 
       const deleteBtn = isAdmin
         ? `<button class="topic-delete secondary btn-icon" data-id="${t.id}" type="button" title="Eliminar tema" style="color:var(--red);border-color:#fca5a5;padding:4px 8px;font-size:12px">${trashIcon} Eliminar</button>`
@@ -239,6 +253,14 @@ function renderTopics(topics) {
       `;
     })
     .join("");
+
+  list.querySelectorAll(".btn-grade-activity").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const topicId = Number(btn.dataset.topicId);
+      const title = btn.dataset.topicTitle;
+      openActivityGradingModal(topicId, title);
+    });
+  });
 
   list.querySelectorAll(".topic-delete").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -386,7 +408,14 @@ function renderMembers(members) {
   container.querySelectorAll(".member-remove-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const uid = Number(btn.dataset.uid);
-      if (!confirm("¿Deseas expulsar a este usuario del grupo?")) return;
+      const confirmed = await confirmModal({
+        title: "Expulsar miembro",
+        message: "¿Deseas expulsar a este usuario del grupo? Perderá acceso a las actividades y materiales asignados.",
+        confirmText: "Expulsar del grupo",
+        cancelText: "Cancelar",
+        danger: true,
+      });
+      if (!confirmed) return;
       try {
         await apiRemoveMember(groupId, uid);
         noticeVisible("Miembro removido.", "success");
@@ -671,6 +700,8 @@ async function init() {
   try {
     currentGroup = await apiGetGroup(groupId);
     byId("group-title").textContent = currentGroup.name;
+    const navName = byId("nav-group-name");
+    if (navName) navName.textContent = currentGroup.name;
     renderGroupCode(currentGroup.code);
 
     let me = currentUser;
@@ -726,7 +757,22 @@ async function init() {
   }
 }
 
-// --- Toggle selector de videos ---
+// --- Toggle selector de videos y filtros de búsqueda/orden ---
+function filterAndRenderPicker() {
+  const query = byId("picker-search-input")?.value?.toLowerCase().trim() || "";
+  const order = byId("picker-sort-order")?.value || "desc";
+  let filtered = myVideos.filter((v) => !query || (v.title && v.title.toLowerCase().includes(query)));
+  filtered.sort((a, b) => {
+    const da = new Date(a.created_at || 0).getTime();
+    const db = new Date(b.created_at || 0).getTime();
+    return order === "asc" ? da - db : db - da;
+  });
+  renderVideoPicker(filtered);
+}
+
+byId("picker-search-input")?.addEventListener("input", filterAndRenderPicker);
+byId("picker-sort-order")?.addEventListener("change", filterAndRenderPicker);
+
 byId("toggle-video-picker-btn")?.addEventListener("click", async () => {
   const container = byId("video-picker-container");
   const isHidden = container.style.display === "none";
@@ -734,12 +780,14 @@ byId("toggle-video-picker-btn")?.addEventListener("click", async () => {
     container.style.display = "";
     if (!myVideos || !myVideos.length) {
       try {
-        const res = await apiListMyVideos(1, 50);
+        const res = await apiListMyVideos(1, 100);
         myVideos = res.items || [];
-        renderVideoPicker(myVideos);
+        filterAndRenderPicker();
       } catch (err) {
         console.warn("Error cargando videos al desplegar:", err);
       }
+    } else {
+      filterAndRenderPicker();
     }
   } else {
     container.style.display = "none";
@@ -770,9 +818,26 @@ byId("copy-code-btn")?.addEventListener("click", () => {
   }
 });
 
+// --- Compartir invitación con código ---
+byId("share-invite-btn")?.addEventListener("click", () => {
+  if (!currentGroup?.code) return;
+  const text = currentGroup.code;
+  const inviteText = `¡Únete a nuestro curso «${currentGroup.name}» en AulaVideo! Código de acceso: ${text}`;
+  navigator.clipboard?.writeText(inviteText).then(
+    () => showToast(`¡Invitación con código ${text} copiada al portapapeles!`, "success"),
+    () => showNotice(`Código de acceso: ${text}`, "info")
+  );
+});
+
 // --- Regenerar código de grupo ---
 byId("regen-code-btn")?.addEventListener("click", async () => {
-  if (!confirm("¿Regenerar el código de este grupo? El código anterior dejará de ser válido.")) return;
+  const confirmed = await confirmModal({
+    title: "Regenerar código de acceso",
+    message: "¿Deseas generar un nuevo código para este grupo? El código anterior dejará de ser válido inmediatamente.",
+    confirmText: "Regenerar código",
+    cancelText: "Cancelar",
+  });
+  if (!confirmed) return;
   await runWithButtonDisabled(byId("regen-code-btn"), async () => {
     try {
       const updated = await apiRegenerateGroupCode(groupId);
@@ -820,6 +885,275 @@ byId("member-form")?.addEventListener("submit", async (e) => {
       noticeVisible(err.message, "error");
     }
   });
+});
+
+// ==========================================
+// --- Modal de Calificación de Actividad (R1 & R2) ---
+// ==========================================
+let currentGradingTopicId = null;
+let currentGradingTopicTitle = "";
+let currentGradingSummary = null;
+let activeStudentAttempts = [];
+let activeAttemptId = null;
+
+function openActivityGradingModal(topicId, topicTitle) {
+  currentGradingTopicId = topicId;
+  currentGradingTopicTitle = topicTitle;
+  const modal = byId("activity-grading-modal");
+  byId("activity-grading-heading").textContent = `Calificación de Actividad: ${topicTitle}`;
+  byId("student-attempt-detail-panel").style.display = "none";
+  if (modal) modal.style.display = "grid";
+  loadActivityGrading(topicId);
+}
+
+function closeActivityGradingModal() {
+  const modal = byId("activity-grading-modal");
+  if (modal) modal.style.display = "none";
+  currentGradingTopicId = null;
+  byId("student-attempt-detail-panel").style.display = "none";
+}
+
+byId("activity-grading-close")?.addEventListener("click", closeActivityGradingModal);
+byId("close-student-detail-btn")?.addEventListener("click", () => {
+  byId("student-attempt-detail-panel").style.display = "none";
+});
+
+async function loadActivityGrading(topicId) {
+  const tbody = byId("activity-students-tbody");
+  tbody.innerHTML = `<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--muted)">Cargando resumen de actividad…</td></tr>`;
+  try {
+    const summary = await apiGetTopicSummary(groupId, topicId);
+    currentGradingSummary = summary;
+    renderActivityGradingSummary(summary);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--red)">${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+function renderActivityGradingSummary(summary) {
+  const members = summary.members_summary || [];
+  const total = members.length;
+  const evaluatedCount = members.filter((m) => m.status === "evaluated").length;
+  const pendingCount = members.filter((m) => m.status === "pending").length;
+  const unsubmittedCount = members.filter((m) => m.status === "not_submitted").length;
+
+  byId("stat-total-students").textContent = total;
+  byId("stat-evaluated-count").textContent = evaluatedCount;
+  byId("stat-pending-count").textContent = pendingCount;
+  byId("stat-unsubmitted-count").textContent = unsubmittedCount;
+
+  const tbody = byId("activity-students-tbody");
+  if (!members.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--muted)">No hay estudiantes inscritos en este grupo.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = members
+    .map((m) => {
+      let badgeHtml = "";
+      if (m.status === "evaluated") {
+        badgeHtml = `<span class="badge" style="background:#d1fae5;color:#065f46;font-weight:700">Calificado</span>`;
+      } else if (m.status === "pending") {
+        badgeHtml = `<span class="badge" style="background:#fef3c7;color:#92400e;font-weight:700">Pendiente</span>`;
+      } else {
+        badgeHtml = `<span class="badge" style="background:#f1f5f9;color:#64748b">Sin entregar</span>`;
+      }
+
+      const scoreDisplay = m.final_score !== null && m.final_score !== undefined
+        ? `<strong>${m.final_score}</strong> / 100`
+        : (m.total_attempts > 0 ? "<em>Por revisar</em>" : "-");
+
+      const actionBtn = m.total_attempts > 0
+        ? `<button type="button" class="btn-inspect-student secondary btn-sm" data-user-id="${m.user_id}" data-user-name="${escapeHtml(m.user_name)}" data-user-email="${escapeHtml(m.user_email)}" style="font-size:12px;padding:4px 10px;cursor:pointer">
+             Revisar y calificar →
+           </button>`
+        : `<span style="font-size:12px;color:var(--muted)">Sin intentos</span>`;
+
+      return `
+        <tr style="border-bottom:1px solid #f1f5f9">
+          <td style="padding:10px 12px;font-weight:600">${escapeHtml(m.user_name)}</td>
+          <td style="padding:10px 12px;color:var(--muted)">${escapeHtml(m.user_email)}</td>
+          <td style="padding:10px 12px;text-align:center">${m.total_attempts}</td>
+          <td style="padding:10px 12px;text-align:center">${scoreDisplay}</td>
+          <td style="padding:10px 12px;text-align:center">${badgeHtml}</td>
+          <td style="padding:10px 12px;text-align:center">${actionBtn}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  tbody.querySelectorAll(".btn-inspect-student").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const uid = Number(btn.dataset.userId);
+      const uname = btn.dataset.userName;
+      const uemail = btn.dataset.userEmail;
+      inspectStudentAttempts(currentGradingTopicId, uid, uname, uemail);
+    });
+  });
+}
+
+async function inspectStudentAttempts(topicId, userId, userName, userEmail) {
+  const panel = byId("student-attempt-detail-panel");
+  panel.style.display = "block";
+  panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  byId("detail-student-name").textContent = `Intentos de: ${userName}`;
+  byId("detail-student-email").textContent = userEmail;
+
+  const tabs = byId("student-attempts-tabs");
+  const content = byId("attempt-questions-breakdown");
+  tabs.innerHTML = "Cargando intentos del alumno…";
+  content.innerHTML = "";
+
+  try {
+    const attempts = await apiGetTopicStudentAttempts(groupId, topicId, userId);
+    activeStudentAttempts = attempts || [];
+    if (!activeStudentAttempts.length) {
+      tabs.innerHTML = "<p style='color:var(--muted);font-size:13px'>Este alumno no tiene intentos registrados.</p>";
+      return;
+    }
+
+    renderStudentAttemptTabs(activeStudentAttempts);
+    const latest = activeStudentAttempts[activeStudentAttempts.length - 1];
+    selectStudentAttempt(latest);
+  } catch (err) {
+    tabs.innerHTML = `<p style="color:var(--red);font-size:13px">Error: ${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function renderStudentAttemptTabs(attempts) {
+  const tabs = byId("student-attempts-tabs");
+  tabs.innerHTML = attempts
+    .map((att, idx) => {
+      const isLatest = idx === attempts.length - 1;
+      return `
+        <button type="button" class="btn-attempt-tab secondary btn-sm" data-attempt-id="${att.id}" style="font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer">
+          Intento #${att.attempt_number || idx + 1} (${att.final_score ?? att.raw_score} pts) ${isLatest ? "★ Último" : ""}
+        </button>
+      `;
+    })
+    .join("");
+
+  tabs.querySelectorAll(".btn-attempt-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const attId = Number(btn.dataset.attemptId);
+      const att = activeStudentAttempts.find((a) => a.id === attId);
+      if (att) selectStudentAttempt(att);
+    });
+  });
+}
+
+function selectStudentAttempt(att) {
+  activeAttemptId = att.id;
+
+  byId("student-attempts-tabs")?.querySelectorAll(".btn-attempt-tab").forEach((btn) => {
+    if (Number(btn.dataset.attemptId) === att.id) {
+      btn.style.background = "var(--blue)";
+      btn.style.color = "#fff";
+      btn.style.borderColor = "var(--blue)";
+    } else {
+      btn.style.background = "";
+      btn.style.color = "";
+      btn.style.borderColor = "";
+    }
+  });
+
+  byId("grade-inline-attempt-id").value = att.id;
+  byId("grade-inline-score").value = att.final_score ?? att.raw_score;
+
+  let reviewNotes = "";
+  let answersData = null;
+  try {
+    if (att.answers_json) {
+      answersData = typeof att.answers_json === "string" ? JSON.parse(att.answers_json) : att.answers_json;
+      if (answersData && typeof answersData === "object") {
+        reviewNotes = answersData.review_notes || "";
+      }
+    }
+  } catch (e) {
+    console.warn("Error parsing answers_json:", e);
+  }
+  byId("grade-inline-notes").value = reviewNotes;
+
+  const out = byId("attempt-questions-breakdown");
+  const submittedDate = att.submitted_at ? new Date(att.submitted_at).toLocaleString("es") : "Sin fecha";
+
+  let questionsHtml = "";
+  if (answersData) {
+    const mcAnswers = answersData.multiple_choice_answers || answersData.answers || [];
+    const openAnswers = answersData.open_answers || [];
+
+    if (mcAnswers.length > 0) {
+      questionsHtml += `<h4 style="margin:12px 0 6px;font-size:13px;color:var(--ink)">Respuestas de opción múltiple entregadas:</h4>`;
+      questionsHtml += mcAnswers.map((ans, idx) => `
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin-bottom:6px">
+          <strong>Pregunta #${(ans.question_index ?? idx) + 1}:</strong> Opción seleccionada: <code>${ans.selected_option !== undefined ? `Opción ${ans.selected_option + 1}` : 'Sin responder'}</code>
+        </div>
+      `).join("");
+    }
+
+    if (openAnswers.length > 0) {
+      questionsHtml += `<h4 style="margin:12px 0 6px;font-size:13px;color:var(--ink)">Respuestas a preguntas abiertas:</h4>`;
+      questionsHtml += openAnswers.map((ans, idx) => `
+        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin-bottom:6px">
+          <strong>Pregunta #${(ans.question_index ?? idx) + 1}:</strong>
+          <p style="margin:4px 0 0;white-space:pre-wrap;background:#fff;padding:8px;border-radius:4px;border:1px solid #e2e8f0">${escapeHtml(ans.answer || ans.student_answer || '')}</p>
+        </div>
+      `).join("");
+    }
+  }
+
+  if (!questionsHtml) {
+    questionsHtml = `<p style="color:var(--muted)">No se registraron respuestas detalladas para este intento.</p>`;
+  }
+
+  out.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+      <span style="font-size:13px"><strong>Intento #${att.attempt_number}</strong> · Entregado: ${submittedDate}</span>
+      <span style="font-size:13px">Puntaje base: <strong>${att.raw_score}</strong> | Calificación final: <strong style="color:var(--blue)">${att.final_score}</strong></span>
+    </div>
+    ${reviewNotes ? `<div style="background:#f0f9ff;border-left:3px solid var(--blue);padding:8px 12px;border-radius:4px;margin-bottom:10px;font-size:12.5px"><strong>Observaciones guardadas:</strong> ${escapeHtml(reviewNotes)}</div>` : ''}
+    ${questionsHtml}
+  `;
+}
+
+byId("activity-inline-grade-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const attemptId = Number(byId("grade-inline-attempt-id").value);
+  const finalScore = parseFloat(byId("grade-inline-score").value);
+  const reviewNotes = byId("grade-inline-notes").value.trim();
+
+  if (!attemptId || isNaN(finalScore)) return;
+
+  await runWithButtonDisabled(byId("grade-inline-submit-btn"), async () => {
+    try {
+      await apiUpdateAttemptGrade(groupId, currentGradingTopicId, attemptId, finalScore, reviewNotes);
+      showToast("Calificación actualizada exitosamente.", "success");
+      const currentAttempt = activeStudentAttempts.find((a) => a.id === attemptId);
+      if (currentAttempt) {
+        currentAttempt.final_score = finalScore;
+      }
+      if (currentGradingTopicId) {
+        await loadActivityGrading(currentGradingTopicId);
+        renderStudentAttemptTabs(activeStudentAttempts);
+        if (currentAttempt) selectStudentAttempt(currentAttempt);
+      }
+    } catch (err) {
+      noticeVisible(err.message, "error");
+    }
+  });
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if (byId("topic-modal")?.style.display !== "none") closeTopicForm();
+    if (byId("delete-topic-modal")?.style.display !== "none") closeDeleteTopicModal();
+    if (byId("activity-grading-modal")?.style.display !== "none") closeActivityGradingModal();
+    if (byId("grade-review-modal")?.style.display !== "none") {
+      byId("grade-review-modal").style.display = "none";
+      activeReviewData = null;
+    }
+  }
 });
 
 init();

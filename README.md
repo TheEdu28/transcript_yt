@@ -18,7 +18,12 @@ Facilitar el estudio de contenidos audiovisuales mediante la generación de recu
   - Preguntas abiertas orientadas a la comprensión y análisis con puntos clave esperados de evaluación.
   - Configuración pedagógica por niveles cognitivos de la Taxonomía de Bloom (*recordar, comprender, aplicar, analizar, evaluar, crear*).
   - Separación funcional entre el cuestionario oficial asignado por el docente y cuestionarios personales de práctica creados por el estudiante.
+  - Vistas **con respuestas** / **sin respuestas** para el docente (el contenido y la exportación cambian según la vista activa). El estudiante solo recibe la versión sin respuestas: el backend elimina `correct_option`, `explanation` y `expected_points` de la respuesta de la API y rechaza exportaciones con respuestas.
+  - Timestamps calibrados con los segmentos reales de Whisper para que el video inicie entre 5 y 10 segundos antes de la explicación relevante (sin restas fijas).
   - Retroalimentación interactiva inmediata y evaluación asistida por IA para respuestas abiertas.
+- **Resumen oficial y personal:** el resumen oficial del docente es de solo lectura para los estudiantes; cada estudiante genera y edita su propio resumen personal, asociado a su cuenta y al tema, sin afectar el oficial ni el de otros usuarios.
+- **Calificación por actividad:** el docente entra a una actividad (tema), ve qué alumnos están *calificados*, *pendientes* o *sin entregar*, revisa los intentos y respuestas de cada uno y asigna o modifica la nota allí mismo. Cada alumno solo ve sus propios intentos.
+- **Videos:** listado ordenado por fecha de registro (más recientes primero, con opción de invertirlo) y búsqueda por título; ambos funcionan en conjunto.
 - **Exportaciones portables:** Generación local de materiales descargables en formatos Markdown (`.md`), PDF (`.pdf`), Microsoft Word (`.docx`) y JSON (`.json`), con opción para exportar solo las preguntas (sin resolver) o las preguntas acompañadas de sus respuestas y pauta de corrección.
 
 ## Tecnologías
@@ -39,8 +44,8 @@ El pipeline está implementado en **Python 3.11+** e integra las bibliotecas, mo
 El sistema ha sido verificado mediante un conjunto integral de pruebas automatizadas y funcionales:
 
 - **Pruebas realizadas:**
-  - Suite de pruebas automatizadas con Pytest que abarca **75 casos de prueba** distribuidos en pruebas unitarias de servicios, repositorios, configuración y pruebas de integración de API extremo a extremo.
-  - Pruebas de permisos, roles y libro de calificaciones de grupos académicos.
+  - Suite de pruebas automatizadas con Pytest que abarca **193 casos de prueba**: 80 de regresión (servicios, repositorios, configuración, interfaz y permisos de grupos), 100 de extremo a extremo en `backend/tests/e2e/` (matriz de permisos profesor/alumno, límites, combinaciones y escenarios de aula) y 13 adversariales sobre timestamps y permisos.
+  - Pruebas de permisos, roles y calificación por actividad de grupos académicos.
   - Pruebas de exportación multiformato (Markdown, PDF, DOCX y JSON).
   - Pruebas funcionales de interfaz de usuario servida en `/ui/`.
 
@@ -54,7 +59,7 @@ El sistema ha sido verificado mediante un conjunto integral de pruebas automatiz
   - *Persistencia y concurrencia local:* Verificación de la inicialización de SQLite en modo WAL y timeout de espera para evitar bloqueos durante accesos simultáneos.
 
 - **Resultados obtenidos:**
-  - 100% de la suite de pruebas automatizadas ejecutada con éxito (75 pruebas aprobadas).
+  - 100% de la suite de pruebas automatizadas ejecutada con éxito (193 pruebas aprobadas).
   - Validación estructurada estable de salidas de LLM mediante esquemas Pydantic.
   - Trazabilidad y anclaje temporal funcional desde la interfaz de preguntas y glosario hacia el reproductor embebido de video.
 
@@ -82,6 +87,15 @@ Prototipo validado mediante pruebas, con desarrollo y mejoras pendientes.
   - Incorporación de rúbricas docentes personalizables para la evaluación automática de respuestas abiertas.
   - Soporte para ingesta de material didáctico complementario en formato PDF o diapositivas.
   - Transición hacia bases de datos relacionales cliente-servidor (ej. PostgreSQL + pgvector) y colas distribuidas (Celery + Redis) para entornos multiusuario a escala.
+
+## Estructura del repositorio
+La aplicación vigente vive **íntegramente en `backend/`** (API, interfaz web en `backend/app/web/`, servicios y pruebas). Consulte [`backend/README.md`](backend/README.md) para el detalle técnico.
+
+- `backend/`: código de la API FastAPI, interfaz `/ui/`, pruebas (`backend/tests/`) y dependencias (`backend/requirements.txt`).
+- `.env` / `.env.example`: configuración compartida; se lee desde la raíz.
+- `data/`: datos generados localmente (audio, transcripciones, ChromaDB, exportaciones); ignorados por Git salvo los `.gitkeep`.
+- `docs/`, `notebooks/`: bitácora de cambios y prototipos exploratorios.
+- `app/`, `tests/`, `requirements.txt` (raíz): remanentes del prototipo inicial (solo health y chunking); **no** forman parte de la aplicación actual y no se necesitan para ejecutarla.
 
 ## Ejecución
 Para reproducir la ejecución del prototipo en un entorno local, siga los siguientes requisitos y pasos:

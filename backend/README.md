@@ -179,14 +179,29 @@ Invoke-RestMethod -Method Post -Uri "http://127.0.0.1:8000/api/v1/materials/$($q
 
 La respuesta conserva `evidence_timestamp`, indica si una opción fue correcta y, para preguntas abiertas, devuelve `achieved_points`, `missing_points` y una sugerencia breve.
 
+## Roles, calificaciones y resúmenes (actividad por tema)
+
+Los permisos se resuelven por grupo (administrador/docente vs. miembro/alumno):
+
+- **Calificar por actividad:** `GET /api/v1/groups/{group_id}/topics/{topic_id}/summary` lista a los alumnos con `status` (`evaluated`, `pending`, `not_submitted`), `attempt_count`, `latest_score` y `final_score`. El docente consulta los intentos de un alumno con `GET .../topics/{topic_id}/attempts?user_id={id}` y modifica la nota con `PATCH .../topics/{topic_id}/attempts/{attempt_id}` (`final_score` 0–100 y `review_notes`). Un alumno solo obtiene sus propios intentos (el `user_id` se ignora) y recibe `403` al intentar calificar.
+- **Videos:** `GET /api/v1/videos?search=texto&order=desc|asc` ordena por `created_at` (predeterminado `desc`) y filtra por título sin distinguir mayúsculas.
+- **Cuestionario con/sin respuestas:** a los alumnos, `GET /materials/{id}`, `GET /groups/{id}/topics/{id}/materials` y `GET /materials/{id}/export` devuelven el cuestionario sin `correct_option`, `explanation` ni `expected_points`; `export?include_answers=true` solo se concede al docente (`403` para alumnos).
+- **Resúmenes:** el resumen oficial (`shared_summary`) es de solo lectura para alumnos (`403` al editar); cada alumno tiene su `personal_summary` (`owner_id` = su usuario) que no sobrescribe el oficial ni el de otros.
+- **Timestamps:** `app/services/timestamp_service.py` calibra el `evidence_timestamp` con los segmentos de Whisper para dejar 5–10 s de margen previo a la explicación, siempre en formato `HH:MM:SS`; se aplica tras generar el cuestionario.
+
 ## Interfaz visual
 
 La interfaz se divide en vistas independientes, servidas sin framework desde `/ui/`:
 
-1. `/ui/video/`: pega una URL pública de YouTube, observa el progreso en tiempo real y permite cancelar el trabajo con el botón "✕ Cancelar".
-2. `/ui/resumen/?video=42`: genera el resumen grounded de un video indexado, con selector de proveedor/modelo e indicador visual de cuota.
-3. `/ui/quiz/?video=42`: configura niveles de Bloom, genera y responde un cuestionario oficial o de práctica personal.
-4. `/ui/material/?video=42&material=17`: carga, edita, restaura versiones y exporta un material existente en PDF, Word, Markdown o JSON con o sin respuestas.
+1. `/ui/auth/`: inicio de sesión y registro con pestañas.
+2. `/ui/videos/`: "Mis videos" con búsqueda por título y orden más recientes/antiguos primero.
+3. `/ui/video/`: pega una URL pública de YouTube, observa el progreso en tiempo real y permite cancelar el trabajo (con confirmación).
+4. `/ui/groups/` y `/ui/groups/detail/`: grupos, miembros, temas y calificación por actividad (alumnos calificados/pendientes, intentos y notas).
+5. `/ui/resumen/?video=42`: resumen oficial (solo lectura para alumnos) y "Mi resumen personal", con selector de proveedor/modelo.
+6. `/ui/quiz/?video=42`: niveles de Bloom, cuestionario oficial o de práctica; el docente alterna con/sin respuestas, el alumno solo ve la versión sin respuestas.
+7. `/ui/material/?video=42&material=17`: carga, edita, restaura versiones y exporta un material en PDF, Word, Markdown o JSON.
+
+Las acciones destructivas usan diálogos de confirmación propios y los avisos de éxito/error usan notificaciones tipo toast (`shared.js`).
 
 `video` y `material` se conservan en los query params; por ello los enlaces se pueden recargar o compartir sin depender de variables globales de JavaScript. La interfaz no sustituye ninguna ruta de API: usa los mismos endpoints documentados, incluyendo `POST /api/v1/videos/{video_id}/cancel` para abortar ingestas y SQLite en modo WAL para concurrencia fluida sin bloqueos.
 
@@ -197,6 +212,8 @@ Desde `backend`, con el entorno virtual activo:
 ```powershell
 python -m pytest -q
 ```
+
+Suites principales: regresión (`tests/services`, `tests/core`, `tests/repositories`, `tests/test_*.py`: 80 pruebas), extremo a extremo con matriz de permisos profesor/alumno (`tests/e2e/`: 100 pruebas) y adversariales (`tests/test_challenger_adversarial.py`: 13 pruebas). En Windows, las que usan `TestClient` pueden requerir ejecutarse fuera de un entorno aislado sin red, por el socket loopback de asyncio.
 
 Para validar específicamente la exportación:
 

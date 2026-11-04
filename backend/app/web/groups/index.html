@@ -1,29 +1,79 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mis grupos · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
-<body><main class="shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1>Mis <span>grupos</span></h1></div>
-<div id="user-bar" class="user-bar"></div></header>
-<div id="notice" class="notice" role="status" style="display:none"></div>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mis grupos · AulaVideo</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">AULAVIDEO</p>
+      <h1>Mis <span>grupos</span></h1>
+      <p class="hero-subtitle">Organiza tus clases, comparte actividades didácticas y realiza seguimiento de calificaciones.</p>
+    </div>
+    <div id="user-bar" class="user-bar"></div>
+  </header>
 
-<div class="grid-2-col" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-  <section class="panel accent-panel">
-    <div class="panel-heading"><p class="number">01</p><h2>Crear grupo</h2></div>
-    <form id="create-form" class="stack">
-      <label>Nombre del grupo<input id="group-name" type="text" required placeholder="Ej: Biología 3°A"></label>
-      <button id="create-btn" type="submit">Crear grupo →</button>
-    </form>
+  <nav class="steps" aria-label="Navegación">
+    <span>Mis grupos</span><i></i>
+    <a href="/ui/videos/">Mis videos</a><i></i>
+    <a href="/ui/video/">+ Procesar video</a>
+  </nav>
+
+  <div id="notice" class="notice" role="status" style="display:none"></div>
+
+  <!-- Crear grupo o Unirse con código (responsivo) -->
+  <div class="grid top-grid">
+    <section class="panel accent-panel">
+      <div class="panel-heading">
+        <p class="number">DOCENTE</p>
+        <h2>Crear nuevo grupo</h2>
+      </div>
+      <p class="hint">Crea un aula para publicar temas, asignar videos y revisar las calificaciones de tus alumnos.</p>
+      <form id="create-form" class="stack">
+        <div>
+          <label for="group-name">Nombre del grupo o curso</label>
+          <input id="group-name" type="text" required placeholder="Ej: Biología 3°A">
+        </div>
+        <button id="create-btn" type="submit">
+          Crear grupo →
+        </button>
+      </form>
+    </section>
+
+    <section class="panel accent-panel">
+      <div class="panel-heading">
+        <p class="number">ESTUDIANTE</p>
+        <h2>Unirse con código</h2>
+      </div>
+      <p class="hint">Ingresa el código alfanumérico de 6 caracteres suministrado por tu profesor para inscribirte.</p>
+      <form id="join-form" class="stack">
+        <div>
+          <label for="join-code">Código de acceso (6 caracteres)</label>
+          <input id="join-code" type="text" maxlength="6" required placeholder="Ej: AB12CD" style="text-transform:uppercase;font-family:monospace;letter-spacing:2px;font-weight:700">
+        </div>
+        <button id="join-btn" type="submit" class="secondary" style="border-color:var(--blue);color:var(--blue);font-weight:700">
+          Unirse al grupo →
+        </button>
+      </form>
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top:20px">
+    <div class="panel-heading" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+      <div>
+        <p class="number">COMUNIDAD</p>
+        <h2>Tus grupos activos</h2>
+      </div>
+    </div>
+    <p class="hint">Haz clic en un grupo para ver sus temas, acceder a cuestionarios asignados o revisar el libro de notas.</p>
+    <div id="groups-list" class="groups-grid empty-state">Cargando grupos…</div>
   </section>
+</main>
 
-  <section class="panel accent-panel">
-    <div class="panel-heading"><p class="number">02</p><h2>Unirse con código</h2></div>
-    <form id="join-form" class="stack">
-      <label>Código de acceso (6 caracteres)<input id="join-code" type="text" maxlength="6" required placeholder="Ej: AB12CD" style="text-transform:uppercase"></label>
-      <button id="join-btn" type="submit">Unirse al grupo →</button>
-    </form>
-  </section>
-</div>
-
-<section class="panel" style="margin-top:18px">
-  <div class="panel-heading"><p class="number">02</p><h2>Mis grupos</h2></div>
-  <div id="groups-list" class="groups-grid empty-state">Cargando grupos…</div>
-</section>
-</main><script type="module" src="/ui/groups/page.js"></script></body></html>
+<script type="module" src="/ui/groups/page.js"></script>
+</body>
+</html>

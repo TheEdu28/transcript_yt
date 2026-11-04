@@ -1,5 +1,5 @@
 import { apiListMyMaterials, auth, request } from "/ui/api.js";
-import { escapeHtml, getPositiveIntParam, renderUserBar, requireAuth, replaceUrl, runWithButtonDisabled, showNotice, urlFor } from "/ui/shared.js";
+import { confirmModal, escapeHtml, getPositiveIntParam, renderUserBar, requireAuth, replaceUrl, runWithButtonDisabled, showNotice, showToast, urlFor } from "/ui/shared.js";
 
 requireAuth();
 renderUserBar();
@@ -16,11 +16,15 @@ function renderLastEditor(material) {
     : "Última edición: todavía no se ha editado.";
 }
 
-function setNavigation(video, material) {
+function setNavigation(video, material, type = currentType) {
   if (!video) return;
   byId("video-label").textContent = `Video ID: ${video}`;
   byId("summary-link").href = urlFor("/ui/resumen/", { video });
-  byId("quiz-link").href = urlFor("/ui/quiz/", { video, material });
+  const quizParams = { video };
+  if (type === "quiz" && material) {
+    quizParams.material = material;
+  }
+  byId("quiz-link").href = urlFor("/ui/quiz/", quizParams);
 }
 
 // --- Helpers para construir filas del formulario de resumen ---
@@ -161,7 +165,7 @@ async function loadMaterial(id) {
   const material = await request(`/materials/${id}`);
   currentType = material.material_type;
   renderLastEditor(material);
-  setNavigation(material.video_id, material.id);
+  setNavigation(material.video_id, material.id, material.material_type);
   replaceUrl("/ui/material/", { video: material.video_id, material: material.id });
   byId("material-id").value = material.id;
 
@@ -218,6 +222,7 @@ byId("save-button").addEventListener("click", async () => {
       });
       renderLastEditor(updated);
       showNotice("Edición guardada y versión anterior archivada.", "success");
+      showToast("Cambios guardados con éxito", "success");
     } catch (err) { showNotice(err.message, "error"); }
   });
 });
@@ -242,13 +247,20 @@ byId("versions-button").addEventListener("click", async () => {
       </div>`).join("");
     list.querySelectorAll(".restore-version").forEach((button) => {
       button.addEventListener("click", async () => {
-        if (!window.confirm("¿Restaurar esta versión? El contenido actual se conservará en el historial.")) return;
+        const confirmed = await confirmModal({
+          title: "Restaurar versión",
+          message: "¿Deseas restaurar esta versión anterior? El contenido actual se conservará en el historial de versiones.",
+          confirmText: "Restaurar versión",
+          danger: false,
+        });
+        if (!confirmed) return;
         await runWithButtonDisabled(button, async () => {
           try {
             const restored = await request(`/materials/${materialId}/versions/${button.dataset.versionId}/restore`, { method: "POST" });
             renderLastEditor(restored);
             renderSummaryForm(restored.content);
-            showNotice("Versión restaurada. El estado anterior también fue archivado.", "success");
+            showNotice("Versión restaurada con éxito. El estado anterior fue archivado en el historial.", "success");
+            showToast("Versión restaurada con éxito", "success");
             byId("versions-button").click();
           } catch (err) { showNotice(err.message, "error"); }
         });
@@ -292,6 +304,7 @@ async function downloadExport(format) {
       window.URL.revokeObjectURL(url);
 
       showNotice(`Archivo ${filename} descargado con éxito.`, "success");
+      showToast(`Archivo ${filename} descargado`, "success");
     } catch (err) {
       showNotice(`Error en la exportación: ${err.message}`, "error");
     }

@@ -1,3 +1,72 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Importar video · AulaVideo</title><link rel="stylesheet" href="/ui/styles.css"></head>
-<body><main class="shell"><header class="hero"><div><p class="eyebrow">AULAVIDEO</p><h1>Importar video</h1></div><div id="user-bar" class="user-bar"></div></header><nav class="steps" aria-label="Flujo"><a href="/ui/videos/">← Mis videos</a><i></i><span>Ingesta</span><i></i><a href="/ui/resumen/">Resumen</a><i></i><a href="/ui/quiz/">Cuestionario</a><i></i><a href="/ui/material/">Materiales</a></nav><div id="notice" class="notice" role="status">Ingresa una URL pública de YouTube.</div><section class="panel accent-panel"><div class="panel-heading"><p class="number">01</p><h2>Procesar video</h2></div><p class="hint">Videos públicos de YouTube en español o inglés, con duración máxima de 60 minutos.</p><form id="ingest-form" class="stack"><label>URL de YouTube<input id="video-url" type="url" required placeholder="https://www.youtube.com/watch?v=..."></label><button id="ingest-button" type="submit">Iniciar procesamiento →</button></form><div id="progress-card" class="progress-card hidden"><div class="progress-label"><strong id="progress-stage">En cola</strong><span id="progress-value">0%</span></div><div class="progress-track"><div id="progress-bar"></div></div><div style="display:flex; justify-content:space-between; align-items:center; margin-top:9px;"><small id="progress-detail">Esperando al procesamiento local.</small><button id="cancel-ingest-button" type="button" class="secondary" style="font-size:0.8rem; padding:3px 10px; color:#dc2626; border-color:#fca5a5; cursor:pointer;">✕ Cancelar</button></div></div></section></main><script type="module" src="/ui/video/page.js"></script></body></html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Importar video · AulaVideo</title>
+  <link rel="stylesheet" href="/ui/styles.css">
+</head>
+<body>
+<main class="shell">
+  <header class="hero">
+    <div>
+      <p class="eyebrow">AULAVIDEO</p>
+      <h1>Importar <span>video</span></h1>
+      <p class="hero-subtitle">Descarga el audio, transcribe con Whisper e indexa los vectores semánticos en ChromaDB.</p>
+    </div>
+    <div id="user-bar" class="user-bar"></div>
+  </header>
+
+  <nav class="steps" aria-label="Flujo de trabajo">
+    <a href="/ui/videos/">← Mis videos</a><i></i>
+    <span>1. Ingesta</span><i></i>
+    <a href="/ui/resumen/">2. Resumen</a><i></i>
+    <a href="/ui/quiz/">3. Cuestionario</a><i></i>
+    <a href="/ui/material/">4. Materiales</a>
+  </nav>
+
+  <div id="notice" class="notice" role="status">Ingresa una URL pública de YouTube para iniciar la transcripción e indexación.</div>
+
+  <section class="panel accent-panel">
+    <div class="panel-heading">
+      <p class="number">01</p>
+      <h2>Procesar video educativo</h2>
+    </div>
+    <p class="hint">Admite videos públicos de YouTube en español o inglés, con una duración máxima recomendada de 60 minutos.</p>
+
+    <form id="ingest-form" class="stack">
+      <div>
+        <label for="video-url">URL del video de YouTube</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input id="video-url" type="url" required placeholder="https://www.youtube.com/watch?v=..." style="flex:1;min-width:240px">
+        </div>
+      </div>
+      <div>
+        <button id="ingest-button" type="submit">
+          Iniciar procesamiento →
+        </button>
+      </div>
+    </form>
+
+    <!-- Tarjeta de progreso accesible con roles aria -->
+    <div id="progress-card" class="progress-card hidden" aria-live="polite">
+      <div class="progress-label">
+        <strong id="progress-stage">En cola</strong>
+        <span id="progress-value">0%</span>
+      </div>
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progress-track-el">
+        <div id="progress-bar"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; flex-wrap:wrap; gap:8px">
+        <small id="progress-detail">Esperando al procesamiento local con Whisper…</small>
+        <button id="cancel-ingest-button" type="button" class="secondary" style="font-size:0.8rem; padding:4px 12px; color:#dc2626; border-color:#fca5a5; min-height:auto; cursor:pointer">
+          ✕ Cancelar procesamiento
+        </button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module" src="/ui/video/page.js"></script>
+</body>
+</html>
