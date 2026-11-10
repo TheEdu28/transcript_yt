@@ -1,4 +1,4 @@
-import { apiGetTopicMaterials, apiGetVideo, apiListMyVideos, apiSubmitAttempt, auth, fetchModels, request } from "/ui/api.js?v=2";
+import { apiGetMyTopicAttempts, apiGetTopicMaterials, apiGetVideo, apiListMyVideos, apiSubmitAttempt, auth, fetchModels, request } from "/ui/api.js?v=2";
 import {
   escapeHtml,
   getPositiveIntParam,
@@ -795,6 +795,34 @@ async function init() {
         byId("quiz-mode-nav").style.display = "flex";
         byId("config-panel").style.display = "none"; // Configurar solo sale al crear uno propio
 
+        try {
+          const myAttempts = await apiGetMyTopicAttempts(groupId, topicId);
+          if (myAttempts && myAttempts.length > 0) {
+            const latest = myAttempts[myAttempts.length - 1];
+            const reviewed = myAttempts.slice().reverse().find((a) => a.review_notes);
+            const score = latest.final_score !== null ? latest.final_score : latest.raw_score;
+            const banner = document.createElement("div");
+            banner.id = "student-topic-previous-attempts-banner";
+            banner.style.cssText = "background:#eff6ff;border:1px solid #bfdbfe;border-left:4px solid var(--blue);border-radius:10px;padding:14px 18px;margin-bottom:18px;";
+            banner.innerHTML = `
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <div>
+                  <strong style="color:var(--blue);font-size:15px">Ya has realizado esta evaluación (${myAttempts.length} intento${myAttempts.length > 1 ? 's' : ''})</strong>
+                  <span style="display:block;font-size:13px;color:var(--ink);margin-top:2px">Última calificación registrada: <strong>${score !== null ? score.toFixed(1) : '—'} / 100</strong></span>
+                </div>
+                <a href="/ui/groups/detail/?group=${groupId}" class="secondary" style="font-size:12px;padding:6px 12px;text-decoration:none">Volver al grupo →</a>
+              </div>
+              ${reviewed?.review_notes ? `<div style="margin-top:10px;padding:10px 12px;background:#fff;border-radius:6px;border:1px solid #dbeafe;font-size:13px;color:var(--ink)"><strong style="color:var(--blue)">Comentario del docente:</strong> ${escapeHtml(reviewed.review_notes)}</div>` : ''}
+            `;
+            const outPanel = byId("output-panel");
+            if (outPanel && outPanel.parentNode) {
+              outPanel.parentNode.insertBefore(banner, outPanel);
+            }
+          }
+        } catch (e) {
+          console.warn("No se pudieron cargar intentos previos:", e);
+        }
+
         switchQuizMode("shared");
         showNotice(`Evaluación del profesor lista para responder.`, "info");
         return;
@@ -824,20 +852,6 @@ async function init() {
     const res = await apiListMyVideos(1, 25);
     const videos = res.items || [];
     if (videos.length > 0) {
-      const switcher = byId("video-switcher");
-      const switchBox = byId("video-select-box");
-
-      if (switcher && switchBox) {
-        switcher.innerHTML = videos
-          .map((v) => `<option value="${v.id}" ${videoId === v.id ? "selected" : ""}>${escapeHtml(v.title)}</option>`)
-          .join("");
-        switchBox.style.display = "";
-
-        switcher.addEventListener("change", () => {
-          const chosen = Number(switcher.value);
-          window.location.assign(urlFor("/ui/quiz/", { video: chosen }));
-        });
-      }
 
       if (!videoId) {
         videoId = videos[0].id;

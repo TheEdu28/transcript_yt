@@ -172,10 +172,7 @@
             <p style="font-size:12px;color:var(--muted);margin:0 0 8px">Elige un video de tu historial para vincularlo a este tema:</p>
             <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
               <input type="search" id="picker-search-input" placeholder="Buscar video por título..." style="flex:1;min-width:180px;padding:6px 10px;font-size:12.5px;border:1px solid var(--line);border-radius:6px">
-              <select id="picker-sort-order" style="padding:6px 10px;font-size:12.5px;border:1px solid var(--line);border-radius:6px">
-                <option value="desc" selected>Más recientes primero</option>
-                <option value="asc">Más antiguos primero</option>
-              </select>
+              <button type="button" id="picker-sort-order" class="secondary" data-order="desc" style="padding:6px 10px;font-size:12.5px;white-space:nowrap" title="Invertir orden">↓ Más recientes primero</button>
             </div>
             <div id="video-picker-grid" class="video-picker-grid">Cargando tus videos…</div>
           </div>
@@ -320,6 +317,21 @@
               <button type="submit" id="grade-inline-submit-btn" style="padding:8px 16px;font-size:13px">Guardar calificación individual</button>
             </div>
           </form>
+
+          <!-- Hilo de Diálogo y Retroalimentación con el Estudiante -->
+          <div id="activity-comments-container" class="comments-thread-box" style="margin-top:16px">
+            <h4 style="margin:0 0 10px;font-size:14px;color:var(--ink);display:flex;align-items:center;gap:6px">
+              <svg class="ui-icon" style="width:16px;height:16px;color:var(--blue)" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Diálogo y retroalimentación con el estudiante
+            </h4>
+            <div id="activity-comments-list" class="comments-thread-list">
+              <p style="font-size:12px;color:var(--muted)">Cargando diálogo…</p>
+            </div>
+            <form id="activity-comment-form" class="comment-input-row">
+              <textarea id="activity-comment-input" placeholder="Escribe un mensaje o responde al alumno..." required></textarea>
+              <button type="submit" id="activity-comment-send-btn" class="primary-action" style="margin:0;padding:8px 14px;font-size:12.5px;white-space:nowrap">Enviar</button>
+            </form>
+          </div>
         </div>
       </div>
     </div>

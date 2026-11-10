@@ -30,10 +30,11 @@ byId("video-search-input")?.addEventListener("input", (e) => {
 });
 
 // Selector de orden cronológico
-byId("sort-order-filter")?.addEventListener("change", (e) => {
-  currentOrder = e.target.value;
-  loadPage(1);
-});
+byId("sort-order-toggle")?.addEventListener("click", (e) => {
+    currentOrder = currentOrder === "desc" ? "asc" : "desc";
+    e.currentTarget.textContent = currentOrder === "desc" ? "↓ Más recientes primero" : "↑ Más antiguos primero";
+    loadPage(1);
+  });
 
 function formatDuration(secs) {
   if (!secs && secs !== 0) return "—";

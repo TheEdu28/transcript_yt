@@ -104,6 +104,20 @@ class GroupService:
         )
         session.commit()
         session.refresh(topic)
+
+        try:
+            self.repository.notify_group_members(
+                session,
+                group_id=group.id,
+                exclude_user_id=creator.id,
+                title=f"Nueva actividad en {group.name}",
+                message=f"El docente publicó la actividad «{topic.title}».",
+                type="new_topic",
+                link=f"/ui/groups/detail/?group={group.id}&topic={topic.id}",
+            )
+        except Exception:
+            pass
+
         return topic
 
     def list_topics_with_materials(self, session: Session, group: Group) -> list[TopicResponse]:
@@ -389,9 +403,131 @@ class GroupService:
         if not attempt or attempt.topic_id != topic.id:
             raise PipelineError("El intento no existe en este tema.", code="ATTEMPT_NOT_FOUND", status_code=404)
 
-        return self.repository.update_attempt_score(
+        updated_attempt = self.repository.update_attempt_score(
             session, attempt, final_score=payload.final_score, review_notes=payload.review_notes
         )
+
+        try:
+            admin_user = session.get(User, group.admin_id)
+            admin_name = admin_user.nombre if admin_user else "Docente"
+
+            # Si el docente incluyó comentarios, registrarlo en el hilo de comentarios
+            if payload.review_notes and payload.review_notes.strip():
+                self.repository.create_topic_comment(
+                    session,
+                    topic_id=topic.id,
+                    student_id=attempt.user_id,
+                    author_id=group.admin_id,
+                    author_name=admin_name,
+                    author_role="teacher",
+                    content=payload.review_notes.strip(),
+                    attempt_id=attempt.id,
+                )
+
+            # Notificar al alumno sobre la calificación y/o comentario
+            msg = f"Tu actividad «{topic.title}» fue calificada con {payload.final_score}/100."
+            if payload.review_notes and payload.review_notes.strip():
+                snippet = payload.review_notes.strip()
+                if len(snippet) > 80:
+                    snippet = snippet[:77] + "..."
+                msg += f" Comentario: «{snippet}»"
+
+            self.repository.create_notification(
+                session,
+                user_id=attempt.user_id,
+                title=f"Calificación en {group.name}",
+                message=msg,
+                type="grade",
+                link=f"/ui/groups/detail/?group={group.id}&topic={topic.id}",
+            )
+        except Exception:
+            pass
+
+        return updated_attempt
+
+    # -------------------------------------------------------------------------
+    # Hilo de Retroalimentación y Comentarios Alumno <-> Docente
+    # -------------------------------------------------------------------------
+    def list_topic_comments(
+        self,
+        session: Session,
+        group: Group,
+        topic_id: int,
+        student_id: int,
+        current_user: User,
+    ) -> list[TopicComment]:
+        topic = self.repository.get_topic(session, topic_id)
+        if not topic or topic.group_id != group.id:
+            raise PipelineError("El tema no existe en este grupo.", code="TOPIC_NOT_FOUND", status_code=404)
+
+        is_admin = (current_user.id == group.admin_id)
+        if not is_admin and current_user.id != student_id:
+            raise PipelineError("Solo puedes consultar tus propios comentarios.", code="FORBIDDEN_COMMENTS", status_code=403)
+
+        return self.repository.list_topic_comments(session, topic_id, student_id)
+
+    def create_topic_comment(
+        self,
+        session: Session,
+        group: Group,
+        topic_id: int,
+        current_user: User,
+        payload: TopicCommentCreate,
+    ) -> TopicComment:
+        topic = self.repository.get_topic(session, topic_id)
+        if not topic or topic.group_id != group.id:
+            raise PipelineError("El tema no existe en este grupo.", code="TOPIC_NOT_FOUND", status_code=404)
+
+        is_admin = (current_user.id == group.admin_id)
+        if is_admin:
+            if not payload.student_id:
+                raise PipelineError("El docente debe indicar el student_id para responder.", code="STUDENT_ID_REQUIRED", status_code=400)
+            target_student_id = payload.student_id
+            author_role = "teacher"
+        else:
+            target_student_id = current_user.id
+            author_role = "student"
+
+        comment = self.repository.create_topic_comment(
+            session,
+            topic_id=topic.id,
+            student_id=target_student_id,
+            author_id=current_user.id,
+            author_name=current_user.nombre,
+            author_role=author_role,
+            content=payload.content.strip(),
+            attempt_id=payload.attempt_id,
+        )
+
+        try:
+            snippet = payload.content.strip()
+            if len(snippet) > 80:
+                snippet = snippet[:77] + "..."
+
+            if is_admin:
+                # El docente comenta -> notificar al alumno
+                self.repository.create_notification(
+                    session,
+                    user_id=target_student_id,
+                    title=f"Comentario del docente en {group.name}",
+                    message=f"El profesor comentó en «{topic.title}»: «{snippet}»",
+                    type="comment",
+                    link=f"/ui/groups/detail/?group={group.id}&topic={topic.id}",
+                )
+            else:
+                # El alumno responde -> notificar al docente
+                self.repository.create_notification(
+                    session,
+                    user_id=group.admin_id,
+                    title=f"Respuesta de alumno en {group.name}",
+                    message=f"{current_user.nombre} respondió en «{topic.title}»: «{snippet}»",
+                    type="comment",
+                    link=f"/ui/groups/detail/?group={group.id}&topic={topic.id}",
+                )
+        except Exception:
+            pass
+
+        return comment
 
     # -------------------------------------------------------------------------
     # Libro de Calificaciones y Estadísticas
@@ -425,13 +561,20 @@ class GroupService:
                     latest_att = max(attempts, key=lambda a: a.attempt_number)
                     final_scores.append(best_att.final_score)
 
-                    review_notes = None
-                    try:
-                        ans_data = json.loads(latest_att.answers_json) if latest_att.answers_json else {}
-                        if isinstance(ans_data, dict):
-                            review_notes = ans_data.get("review_notes")
-                    except Exception:
-                        pass
+                    review_notes = getattr(latest_att, "review_notes", None)
+                    if not review_notes:
+                        for a in reversed(attempts):
+                            notes = getattr(a, "review_notes", None)
+                            if not notes and hasattr(a, "answers_json") and a.answers_json:
+                                try:
+                                    ans_data = json.loads(a.answers_json)
+                                    if isinstance(ans_data, dict):
+                                        notes = ans_data.get("review_notes")
+                                except Exception:
+                                    pass
+                            if notes:
+                                review_notes = notes
+                                break
 
                     grade_item = MemberTopicGrade(
                         topic_id=t.id,

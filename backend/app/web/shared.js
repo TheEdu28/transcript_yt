@@ -1,4 +1,9 @@
-import { auth } from "/ui/api.js?v=2";
+import {
+  apiGetNotifications,
+  apiMarkAllNotificationsRead,
+  apiMarkNotificationRead,
+  auth,
+} from "/ui/api.js?v=2";
 
 /** Redirige a /ui/auth/ si no hay sesión activa. Llamar al inicio de páginas protegidas. */
 export function requireAuth() {
@@ -15,42 +20,155 @@ export function renderUserBar() {
   if (!user) return;
 
   bar.innerHTML = `
-    <details class="user-menu">
-      <summary class="user-menu-trigger" aria-haspopup="true" aria-label="Menú de usuario">
-        <span class="user-avatar-badge">${escapeHtml((user.nombre || "U").charAt(0).toUpperCase())}</span>
-        <span class="user-menu-name">${escapeHtml(user.nombre)}</span>
-        <svg class="ui-icon" aria-hidden="true" style="margin-left:4px" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
-      </summary>
-      <div class="user-menu-panel" role="menu">
-        <div class="user-menu-header">
-          <strong>${escapeHtml(user.nombre)}</strong>
-          <small>${escapeHtml(user.email || "")}</small>
-        </div>
-        <hr class="user-menu-divider">
-        <a href="/ui/groups/" role="menuitem">
-          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          Mis grupos
-        </a>
-        <a href="/ui/videos/" role="menuitem">
-          <svg class="ui-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-          Mis videos
-        </a>
-        <a href="/ui/video/" role="menuitem">
-          <svg class="ui-icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Procesar nuevo video
-        </a>
-        <hr class="user-menu-divider">
-        <button id="logout-btn" type="button" role="menuitem">
-          <svg class="ui-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-          Cerrar sesión
+    <div style="display:flex;align-items:center;gap:10px">
+      <div class="notif-wrapper">
+        <button type="button" id="notif-bell-btn" class="secondary" style="position:relative;padding:7px 9px;border-radius:50%;min-height:auto;border:1px solid var(--line);background:#fff;cursor:pointer;display:grid;place-items:center" title="Notificaciones" aria-label="Notificaciones">
+          <svg class="ui-icon" style="width:17px;height:17px;color:var(--ink)" viewBox="0 0 24 24"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span id="notif-badge" class="notif-badge" style="display:none">0</span>
         </button>
+        <div id="notif-dropdown" class="notif-dropdown">
+          <div class="notif-header">
+            <strong style="font-size:12.5px;color:var(--ink)">Notificaciones</strong>
+            <button type="button" id="notif-mark-all-btn" style="background:none;border:none;color:var(--blue);font-size:11.5px;font-weight:600;cursor:pointer;padding:0">Marcar leídas</button>
+          </div>
+          <div id="notif-list" class="notif-list">
+            <div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Cargando…</div>
+          </div>
+        </div>
       </div>
-    </details>`;
+
+      <details class="user-menu">
+        <summary class="user-menu-trigger" aria-haspopup="true" aria-label="Menú de usuario">
+          <span class="user-avatar-badge">${escapeHtml((user.nombre || "U").charAt(0).toUpperCase())}</span>
+          <span class="user-menu-name">${escapeHtml(user.nombre)}</span>
+          <svg class="ui-icon" aria-hidden="true" style="margin-left:4px" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        </summary>
+        <div class="user-menu-panel" role="menu">
+          <div class="user-menu-header">
+            <strong>${escapeHtml(user.nombre)}</strong>
+            <small>${escapeHtml(user.email || "")}</small>
+          </div>
+          <hr class="user-menu-divider">
+          <a href="/ui/groups/" role="menuitem">
+            <svg class="ui-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            Mis grupos
+          </a>
+          <a href="/ui/videos/" role="menuitem">
+            <svg class="ui-icon" viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+            Mis videos
+          </a>
+          <a href="/ui/video/" role="menuitem">
+            <svg class="ui-icon" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Procesar nuevo video
+          </a>
+          <hr class="user-menu-divider">
+          <button id="logout-btn" type="button" role="menuitem">
+            <svg class="ui-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Cerrar sesión
+          </button>
+        </div>
+      </details>
+    </div>`;
+
+  setupNotificationsWidget(bar);
 
   bar.querySelector("#logout-btn")?.addEventListener("click", () => {
     auth.clear();
     window.location.assign("/ui/auth/");
   });
+}
+
+async function setupNotificationsWidget(bar) {
+  const bell = bar.querySelector("#notif-bell-btn");
+  const badge = bar.querySelector("#notif-badge");
+  const dropdown = bar.querySelector("#notif-dropdown");
+  const list = bar.querySelector("#notif-list");
+  const markAllBtn = bar.querySelector("#notif-mark-all-btn");
+
+  if (!bell || !dropdown) return;
+
+  async function refreshNotifications() {
+    try {
+      const data = await apiGetNotifications(25);
+      const items = data.items || [];
+      const unread = data.unread_count || 0;
+
+      if (unread > 0) {
+        badge.textContent = unread > 99 ? "99+" : unread;
+        badge.style.display = "block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      if (!items.length) {
+        list.innerHTML = `<div style="padding:20px;text-align:center;font-size:12.5px;color:var(--muted)">No tienes notificaciones aún.</div>`;
+        return;
+      }
+
+      list.innerHTML = items.map((item) => {
+        const timeStr = item.created_at ? new Date(item.created_at).toLocaleString("es", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
+        return `
+          <div class="notif-item ${item.is_read ? '' : 'unread'}" data-id="${item.id}" data-link="${escapeHtml(item.link || '')}">
+            <div class="notif-item-title">
+              <span>${escapeHtml(item.title)}</span>
+              ${!item.is_read ? '<span class="notif-dot"></span>' : ''}
+            </div>
+            <div class="notif-item-msg">${escapeHtml(item.message)}</div>
+            <div class="notif-item-time">${escapeHtml(timeStr)}</div>
+          </div>
+        `;
+      }).join("");
+
+      list.querySelectorAll(".notif-item").forEach((el) => {
+        el.addEventListener("click", async () => {
+          const notifId = Number(el.dataset.id);
+          const link = el.dataset.link;
+          try {
+            await apiMarkNotificationRead(notifId);
+          } catch (e) {
+            console.warn("Error marking notif as read:", e);
+          }
+          if (link) {
+            window.location.assign(link);
+          } else {
+            refreshNotifications();
+          }
+        });
+      });
+    } catch (err) {
+      console.warn("No se pudieron cargar notificaciones:", err);
+    }
+  }
+
+  bell.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = dropdown.classList.contains("open");
+    if (!isOpen) {
+      dropdown.classList.add("open");
+      refreshNotifications();
+    } else {
+      dropdown.classList.remove("open");
+    }
+  });
+
+  markAllBtn?.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    try {
+      await apiMarkAllNotificationsRead();
+      refreshNotifications();
+    } catch (e) {
+      console.warn("Error marking all read:", e);
+    }
+  });
+
+  document.addEventListener("click", (e) => {
+    if (!dropdown.contains(e.target) && !bell.contains(e.target)) {
+      dropdown.classList.remove("open");
+    }
+  });
+
+  // Carga inicial de conteo en segundo plano
+  refreshNotifications();
 }
 
 export function getPositiveIntParam(name) {

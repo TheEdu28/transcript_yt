@@ -156,3 +156,30 @@ export async function apiGetTopicStudentSummaries(groupId, topicId) {
   return request(`/groups/${groupId}/topics/${topicId}/student-summaries`);
 }
 
+// --- Topic Comments (Thread Docente <-> Alumno) ---
+export async function apiListTopicComments(groupId, topicId, studentId = null) {
+  const query = studentId ? `?student_id=${studentId}` : "";
+  return request(`/groups/${groupId}/topics/${topicId}/comments${query}`);
+}
+
+export async function apiCreateTopicComment(groupId, topicId, content, studentId = null, attemptId = null) {
+  return request(`/groups/${groupId}/topics/${topicId}/comments`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, student_id: studentId, attempt_id: attemptId }),
+  });
+}
+
+// --- Notifications ---
+export async function apiGetNotifications(limit = 30) {
+  return request(`/notifications?limit=${limit}`);
+}
+
+export async function apiMarkNotificationRead(notificationId) {
+  return request(`/notifications/${notificationId}/read`, { method: "PATCH" });
+}
+
+export async function apiMarkAllNotificationsRead() {
+  return request(`/notifications/mark-all-read`, { method: "POST" });
+}
+

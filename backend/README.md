@@ -48,7 +48,13 @@ Desde `backend`, con el entorno virtual activo:
 uvicorn app.main:app --reload
 ```
 
-Con el servidor activo, abre `http://127.0.0.1:8000/ui/` para usar la interfaz visual. La documentación técnica sigue disponible en `http://127.0.0.1:8000/docs`.
+Para permitir que otros dispositivos o computadoras en la misma red Wi-Fi/LAN prueben el sistema:
+
+```powershell
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Con el servidor activo, abre `http://127.0.0.1:8000/ui/` para usar la interfaz visual desde la máquina local, o `http://<IP-LOCAL>:8000/ui/` desde otra computadora en la misma red (por ejemplo `http://192.168.100.13:8000/ui/`). La documentación técnica sigue disponible en `/docs`.
 
 Antes de la primera prueba, edita `../.env` y asigna una clave válida a
 `GEMINI_API_KEY` y un secreto aleatorio a `JWT_SECRET_KEY`. Sólo necesitas
@@ -194,9 +200,9 @@ Los permisos se resuelven por grupo (administrador/docente vs. miembro/alumno):
 La interfaz se divide en vistas independientes, servidas sin framework desde `/ui/`:
 
 1. `/ui/auth/`: inicio de sesión y registro con pestañas.
-2. `/ui/videos/`: "Mis videos" con búsqueda por título y orden más recientes/antiguos primero.
+2. `/ui/videos/`: "Mis videos" con búsqueda por título y orden más recientes/antiguos primero. El orden se invierte con un botón (también en el selector de videos del formulario de nuevo tema).
 3. `/ui/video/`: pega una URL pública de YouTube, observa el progreso en tiempo real y permite cancelar el trabajo (con confirmación).
-4. `/ui/groups/` y `/ui/groups/detail/`: grupos, miembros, temas y calificación por actividad (alumnos calificados/pendientes, intentos y notas).
+4. `/ui/groups/` y `/ui/groups/detail/`: grupos, miembros, temas y calificación por actividad (alumnos calificados/pendientes, desglose de respuestas de intentos, ajuste de notas y comentarios docentes visibles para profesor y alumno).
 5. `/ui/resumen/?video=42`: resumen oficial (solo lectura para alumnos) y "Mi resumen personal", con selector de proveedor/modelo.
 6. `/ui/quiz/?video=42`: niveles de Bloom, cuestionario oficial o de práctica; el docente alterna con/sin respuestas, el alumno solo ve la versión sin respuestas.
 7. `/ui/material/?video=42&material=17`: carga, edita, restaura versiones y exporta un material en PDF, Word, Markdown o JSON.

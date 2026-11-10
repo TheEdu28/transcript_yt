@@ -1,5 +1,6 @@
 """Modelos de datos para grupos, membresías, temas y actividades."""
 
+import json
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
@@ -82,3 +83,48 @@ class Attempt(Base):
     submitted_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
 
     topic: Mapped["Topic"] = relationship("Topic", back_populates="attempts")
+
+    @property
+    def review_notes(self) -> str | None:
+        """Extrae la retroalimentación u observaciones docentes de answers_json."""
+        if not self.answers_json:
+            return None
+        try:
+            data = json.loads(self.answers_json)
+            if isinstance(data, dict):
+                notes = data.get("review_notes")
+                return notes.strip() if isinstance(notes, str) and notes.strip() else None
+        except Exception:
+            return None
+        return None
+
+
+class TopicComment(Base):
+    """Comentario o mensaje de retroalimentación bidireccional entre docente y alumno."""
+
+    __tablename__ = "topic_comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    topic_id: Mapped[int] = mapped_column(Integer, ForeignKey("topics.id"), nullable=False, index=True)
+    student_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    author_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    attempt_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("attempts.id"), nullable=True)
+    author_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    author_role: Mapped[str] = mapped_column(String(20), nullable=False)  # "teacher" | "student"
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+
+class Notification(Base):
+    """Notificación dirigida a un usuario del sistema."""
+
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    type: Mapped[str] = mapped_column(String(50), nullable=False)  # "new_topic", "grade", "comment"
+    link: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())

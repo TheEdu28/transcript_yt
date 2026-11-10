@@ -9,7 +9,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.group import Attempt, Group, GroupMembership, Topic
+from app.models.group import Attempt, Group, GroupMembership, Notification, Topic, TopicComment
 from app.models.user import User
 
 
@@ -237,4 +237,154 @@ class GroupRepository:
         session.commit()
         session.refresh(attempt)
         return attempt
+
+    # -------------------------------------------------------------------------
+    # Comentarios y Retroalimentación Bidireccional
+    # -------------------------------------------------------------------------
+    def create_topic_comment(
+        self,
+        session: Session,
+        *,
+        topic_id: int,
+        student_id: int,
+        author_id: int,
+        author_name: str,
+        author_role: str,
+        content: str,
+        attempt_id: int | None = None,
+    ) -> TopicComment:
+        comment = TopicComment(
+            topic_id=topic_id,
+            student_id=student_id,
+            author_id=author_id,
+            author_name=author_name,
+            author_role=author_role,
+            content=content,
+            attempt_id=attempt_id,
+        )
+        session.add(comment)
+        session.commit()
+        session.refresh(comment)
+        return comment
+
+    def list_topic_comments(
+        self,
+        session: Session,
+        topic_id: int,
+        student_id: int,
+    ) -> list[TopicComment]:
+        return list(
+            session.scalars(
+                select(TopicComment)
+                .where(TopicComment.topic_id == topic_id, TopicComment.student_id == student_id)
+                .order_by(TopicComment.created_at.asc(), TopicComment.id.asc())
+            )
+        )
+
+    # -------------------------------------------------------------------------
+    # Notificaciones
+    # -------------------------------------------------------------------------
+    def create_notification(
+        self,
+        session: Session,
+        *,
+        user_id: int,
+        title: str,
+        message: str,
+        type: str,
+        link: str | None = None,
+    ) -> Notification:
+        notif = Notification(
+            user_id=user_id,
+            title=title,
+            message=message,
+            type=type,
+            link=link,
+            is_read=False,
+        )
+        session.add(notif)
+        session.commit()
+        session.refresh(notif)
+        return notif
+
+    def notify_group_members(
+        self,
+        session: Session,
+        *,
+        group_id: int,
+        exclude_user_id: int | None = None,
+        title: str,
+        message: str,
+        type: str,
+        link: str | None = None,
+    ) -> list[Notification]:
+        members = self.get_group_members(session, group_id)
+        created = []
+        for m in members:
+            if exclude_user_id and m.id == exclude_user_id:
+                continue
+            notif = Notification(
+                user_id=m.id,
+                title=title,
+                message=message,
+                type=type,
+                link=link,
+                is_read=False,
+            )
+            session.add(notif)
+            created.append(notif)
+        if created:
+            session.commit()
+        return created
+
+    def list_user_notifications(
+        self,
+        session: Session,
+        user_id: int,
+        limit: int = 40,
+    ) -> tuple[list[Notification], int]:
+        items = list(
+            session.scalars(
+                select(Notification)
+                .where(Notification.user_id == user_id)
+                .order_by(Notification.created_at.desc(), Notification.id.desc())
+                .limit(limit)
+            )
+        )
+        unread = session.scalar(
+            select(func.count(Notification.id)).where(
+                Notification.user_id == user_id, Notification.is_read.is_(False)
+            )
+        ) or 0
+        return items, unread
+
+    def mark_notification_read(
+        self,
+        session: Session,
+        notification_id: int,
+        user_id: int,
+    ) -> bool:
+        notif = session.get(Notification, notification_id)
+        if not notif or notif.user_id != user_id:
+            return False
+        notif.is_read = True
+        session.commit()
+        return True
+
+    def mark_all_notifications_read(
+        self,
+        session: Session,
+        user_id: int,
+    ) -> int:
+        notifications = list(
+            session.scalars(
+                select(Notification).where(
+                    Notification.user_id == user_id, Notification.is_read.is_(False)
+                )
+            )
+        )
+        for n in notifications:
+            n.is_read = True
+        session.commit()
+        return len(notifications)
 

@@ -31,6 +31,8 @@ from app.schemas.contracts import (
     TopicResponse,
     TopicSummaryResponse,
     TopicUpdate,
+    TopicCommentCreate,
+    TopicCommentResponse,
 )
 from app.services.auth_service import get_current_user
 from app.services.group_service import GroupService
@@ -358,5 +360,39 @@ def update_attempt_grade(
     """SOLO admin: revisa y ajusta la calificación final de un intento manualmente."""
     try:
         return group_service.update_attempt_grade(session, group, topic_id, attempt_id, payload)
+    except PipelineError as error:
+        raise_http(error)
+
+
+# =============================================================================
+# Comentarios y Retroalimentación Bidireccional
+# =============================================================================
+@router.get("/{group_id}/topics/{topic_id}/comments", response_model=list[TopicCommentResponse])
+def list_topic_comments(
+    topic_id: int,
+    student_id: int | None = Query(default=None),
+    group: Group = Depends(require_group_member),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Any:
+    """Obtiene el hilo de comentarios de una actividad (profesor con alumno)."""
+    target_id = student_id if (group.admin_id == current_user.id and student_id is not None) else current_user.id
+    try:
+        return group_service.list_topic_comments(session, group, topic_id, target_id, current_user)
+    except PipelineError as error:
+        raise_http(error)
+
+
+@router.post("/{group_id}/topics/{topic_id}/comments", response_model=TopicCommentResponse, status_code=status.HTTP_201_CREATED)
+def create_topic_comment(
+    topic_id: int,
+    payload: TopicCommentCreate,
+    group: Group = Depends(require_group_member),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Any:
+    """Envía un comentario en el hilo de retroalimentación de una actividad."""
+    try:
+        return group_service.create_topic_comment(session, group, topic_id, current_user, payload)
     except PipelineError as error:
         raise_http(error)

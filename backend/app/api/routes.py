@@ -1,4 +1,5 @@
 import threading
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
@@ -13,10 +14,12 @@ from app.models.user import User
 from app.models.video import Video
 from app.models.group import GroupMember, Topic
 from app.repositories.video_repository import VideoRepository
+from app.repositories.group_repository import GroupRepository
 from app.schemas.contracts import (
     ExportFormat, FeedbackRequest, FeedbackResponse, IngestAcceptedResponse, IngestRequest, IngestResponse,
     MaterialResponse, MaterialUpdateRequest, MaterialVersionsResponse, ModelsResponse, ProgressResponse,
     QuizRequest, QuizResponse, SummaryRequest, SummaryResponse, VideoDetailResponse, VideoHistoryResponse,
+    NotificationListResponse, NotificationResponse,
 )
 from app.services.auth_service import get_current_user, get_optional_current_user
 from app.services.export_service import ExportService
@@ -398,3 +401,43 @@ def export_material(
     }
     media_type = media_types[format]
     return FileResponse(path, media_type=media_type, filename=path.name)
+
+
+# =============================================================================
+# Notificaciones
+# =============================================================================
+@router.get("/notifications", response_model=NotificationListResponse)
+def list_my_notifications(
+    limit: int = Query(default=30, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> Any:
+    """Devuelve las notificaciones dirigidas al usuario autenticado y conteo de no leídas."""
+    repo = GroupRepository()
+    items, unread = repo.list_user_notifications(session, current_user.id, limit=limit)
+    return {"items": items, "unread_count": unread}
+
+
+@router.patch("/notifications/{notification_id}/read")
+def mark_notification_as_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, bool]:
+    """Marca una notificación específica como leída."""
+    repo = GroupRepository()
+    ok = repo.mark_notification_read(session, notification_id, current_user.id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Notificación no encontrada")
+    return {"success": True}
+
+
+@router.post("/notifications/mark-all-read")
+def mark_all_notifications_as_read(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """Marca todas las notificaciones pendientes del usuario como leídas."""
+    repo = GroupRepository()
+    count = repo.mark_all_notifications_read(session, current_user.id)
+    return {"success": True, "marked_count": count}

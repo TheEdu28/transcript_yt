@@ -1,6 +1,7 @@
 import {
   apiAddMember,
   apiCreateTopic,
+  apiCreateTopicComment,
   apiDeleteTopic,
   apiGetAllTopicAttempts,
   apiGetGroup,
@@ -10,6 +11,7 @@ import {
   apiGetTopicSummary,
   apiListGroupMembers,
   apiListMyVideos,
+  apiListTopicComments,
   apiListTopics,
   apiMe,
   apiRegenerateGroupCode,
@@ -186,7 +188,7 @@ function selectVideoForTopic(video) {
 // ==========================================
 // --- PESTAÑA: TEMAS ---
 // ==========================================
-function renderTopics(topics) {
+function renderTopics(topics, myGradesData = null) {
   cachedTopics = topics;
   const list = byId("topics-list");
   if (!topics.length) {
@@ -194,6 +196,8 @@ function renderTopics(topics) {
     list.textContent = "No hay temas aún. " + (isAdmin ? "Haz clic en «+ Nuevo tema» para publicar el primero." : "El docente aún no ha publicado actividades en este grupo.");
     return;
   }
+
+  const mySummary = (!isAdmin && myGradesData && myGradesData.members) ? myGradesData.members[0] : null;
 
   list.className = "topics-list";
   list.innerHTML = topics
@@ -214,13 +218,51 @@ function renderTopics(topics) {
       const editIcon = `<svg class="ui-icon icon-pencil" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
       const trashIcon = `<svg class="ui-icon icon-trash" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>`;
 
-      const quizLabel = isAdmin ? "Ver cuestionario (respuestas)" : "Realizar evaluación";
+      const gradeInfo = mySummary ? getMemberGradeInfo(mySummary, t.id) : null;
+      const isSubmitted = Boolean(gradeInfo && gradeInfo.submitted);
+      const studentScore = isSubmitted ? (gradeInfo.final_score !== null ? gradeInfo.final_score : gradeInfo.raw_score) : null;
+
+      const quizLabel = isAdmin ? "Ver cuestionario (respuestas)" : (isSubmitted ? "Revisar evaluación / Reintentar" : "Realizar evaluación");
       const gradeBtn = isAdmin
         ? `<button type="button" class="btn-grade-activity" data-topic-id="${t.id}" data-topic-title="${escapeHtml(t.title)}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 14px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;font-size:13px;font-weight:700;color:#065f46;cursor:pointer">
              <svg class="ui-icon" viewBox="0 0 24 24" style="color:#10b981;width:16px;height:16px"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
              Calificar actividad
            </button>`
         : "";
+
+      const studentFeedbackBlock = (!isAdmin && isSubmitted) ? `
+        <div style="margin-top:12px;padding:12px 14px;background:#f8fafc;border:1px solid var(--line);border-radius:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <span style="font-size:12px;font-weight:700;color:#16a34a;display:inline-flex;align-items:center;gap:4px">
+              ${checkIcon} Evaluación realizada (${gradeInfo.attempts_count} intento${gradeInfo.attempts_count > 1 ? 's' : ''})
+            </span>
+            <span style="font-size:13px;font-weight:700;color:var(--blue)">
+              Nota registrada: ${studentScore !== null ? studentScore.toFixed(1) : '—'} / 100
+            </span>
+          </div>
+          ${gradeInfo.review_notes ? `
+            <div style="margin-top:8px;padding:8px 12px;background:#eff6ff;border:1px solid #bfdbfe;border-left:3px solid var(--blue);border-radius:6px;font-size:12.5px;color:var(--ink)">
+              <strong style="color:var(--blue);display:block;margin-bottom:2px">Comentario del docente:</strong>
+              ${escapeHtml(gradeInfo.review_notes)}
+            </div>
+          ` : ''}
+          <div style="margin-top:10px;display:flex;justify-content:flex-end">
+            <button type="button" class="btn-toggle-student-comments secondary btn-sm" data-topic-id="${t.id}" style="font-size:12px;padding:4px 10px;cursor:pointer;display:inline-flex;align-items:center;gap:4px">
+              <svg class="ui-icon" style="width:14px;height:14px;color:var(--blue)" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              Diálogo / Responder al profesor
+            </button>
+          </div>
+          <div id="student-topic-comments-${t.id}" class="comments-thread-box" style="display:none;margin-top:10px">
+            <div class="comments-thread-list" id="student-comments-list-${t.id}">
+              <p style="font-size:12px;color:var(--muted)">Cargando diálogo…</p>
+            </div>
+            <form class="comment-input-row student-comment-form" data-topic-id="${t.id}">
+              <textarea placeholder="Escribe tu respuesta o duda para el profesor..." required></textarea>
+              <button type="submit" class="primary-action" style="margin:0;padding:8px 14px;font-size:12px;white-space:nowrap">Enviar respuesta</button>
+            </form>
+          </div>
+        </div>
+      ` : "";
 
       const videoLinks = t.video_id
         ? `<div class="topic-links" style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;align-items:center">
@@ -249,6 +291,7 @@ function renderTopics(topics) {
           </div>
           ${t.description ? `<p class="topic-desc" style="margin:10px 0 6px;color:#475569;font-size:13px;line-height:1.5">${escapeHtml(t.description)}</p>` : ""}
           ${videoLinks}
+          ${studentFeedbackBlock}
         </article>
       `;
     })
@@ -267,6 +310,57 @@ function renderTopics(topics) {
       const topicId = Number(btn.dataset.id);
       const topic = cachedTopics.find((t) => t.id === topicId);
       openDeleteTopicModal(topicId, topic?.title || "");
+    });
+  });
+
+  // Diálogo / comentarios del alumno en cada tema
+  list.querySelectorAll(".btn-toggle-student-comments").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const topicId = Number(btn.dataset.topicId);
+      const box = byId(`student-topic-comments-${topicId}`);
+      if (!box) return;
+      const isHidden = box.style.display === "none";
+      if (isHidden) {
+        box.style.display = "block";
+        const threadList = byId(`student-comments-list-${topicId}`);
+        if (threadList) {
+          threadList.innerHTML = `<p style="font-size:12px;color:var(--muted)">Cargando diálogo…</p>`;
+          try {
+            const comments = await apiListTopicComments(groupId, topicId);
+            renderActivityComments(comments, threadList);
+          } catch (err) {
+            threadList.innerHTML = `<p style="font-size:12px;color:var(--red)">${escapeHtml(err.message)}</p>`;
+          }
+        }
+      } else {
+        box.style.display = "none";
+      }
+    });
+  });
+
+  list.querySelectorAll(".student-comment-form").forEach((form) => {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const topicId = Number(form.dataset.topicId);
+      const textarea = form.querySelector("textarea");
+      const content = textarea.value.trim();
+      if (!content) return;
+
+      const submitBtn = form.querySelector("button[type='submit']");
+      await runWithButtonDisabled(submitBtn, async () => {
+        try {
+          await apiCreateTopicComment(groupId, topicId, content);
+          textarea.value = "";
+          showToast("Respuesta enviada al docente exitosamente.", "success");
+          const threadList = byId(`student-comments-list-${topicId}`);
+          if (threadList) {
+            const comments = await apiListTopicComments(groupId, topicId);
+            renderActivityComments(comments, threadList);
+          }
+        } catch (err) {
+          noticeVisible(err.message, "error");
+        }
+      });
     });
   });
 }
@@ -318,7 +412,15 @@ byId("delete-topic-confirm-btn")?.addEventListener("click", async () => {
 async function loadTopics() {
   try {
     const topics = await apiListTopics(groupId);
-    renderTopics(topics);
+    let myGradesData = null;
+    if (!isAdmin) {
+      try {
+        myGradesData = await apiGetGroupGrades(groupId);
+      } catch {
+        // Ignorar si no hay calificaciones aún
+      }
+    }
+    renderTopics(topics, myGradesData);
   } catch (err) {
     noticeVisible(err.message, "error");
   }
@@ -535,6 +637,11 @@ function renderGrades(data) {
                         style="padding:4px 8px;font-size:12px;border-radius:6px;${badgeClass}">
                   ${scoreDisplay} / 100 ${isReviewed ? '<svg class="ui-icon" style="width:0.85em;height:0.85em" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 9.5-9.5z"/></svg>' : ''}
                 </button>
+                ${gradeInfo.review_notes ? `
+                  <div style="font-size:10.5px;color:var(--blue);margin-top:4px;max-width:130px;margin-left:auto;margin-right:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(gradeInfo.review_notes)}">
+                    💬 ${escapeHtml(gradeInfo.review_notes)}
+                  </div>
+                ` : ''}
               </td>
             `;
           })
@@ -760,18 +867,24 @@ async function init() {
 // --- Toggle selector de videos y filtros de búsqueda/orden ---
 function filterAndRenderPicker() {
   const query = byId("picker-search-input")?.value?.toLowerCase().trim() || "";
-  const order = byId("picker-sort-order")?.value || "desc";
+  const order = byId("picker-sort-order")?.dataset.order || "desc";
   let filtered = myVideos.filter((v) => !query || (v.title && v.title.toLowerCase().includes(query)));
   filtered.sort((a, b) => {
     const da = new Date(a.created_at || 0).getTime();
     const db = new Date(b.created_at || 0).getTime();
-    return order === "asc" ? da - db : db - da;
+    const diff = (da - db) || (a.id - b.id);
+    return order === "asc" ? diff : -diff;
   });
   renderVideoPicker(filtered);
 }
 
 byId("picker-search-input")?.addEventListener("input", filterAndRenderPicker);
-byId("picker-sort-order")?.addEventListener("change", filterAndRenderPicker);
+byId("picker-sort-order")?.addEventListener("click", (e) => {
+  const btn = e.currentTarget;
+  btn.dataset.order = btn.dataset.order === "desc" ? "asc" : "desc";
+  btn.textContent = btn.dataset.order === "desc" ? "↓ Más recientes primero" : "↑ Más antiguos primero";
+  filterAndRenderPicker();
+});
 
 byId("toggle-video-picker-btn")?.addEventListener("click", async () => {
   const container = byId("video-picker-container");
@@ -895,6 +1008,7 @@ let currentGradingTopicTitle = "";
 let currentGradingSummary = null;
 let activeStudentAttempts = [];
 let activeAttemptId = null;
+let activeStudentId = null;
 
 function openActivityGradingModal(topicId, topicTitle) {
   currentGradingTopicId = topicId;
@@ -910,6 +1024,7 @@ function closeActivityGradingModal() {
   const modal = byId("activity-grading-modal");
   if (modal) modal.style.display = "none";
   currentGradingTopicId = null;
+  activeStudentId = null;
   byId("student-attempt-detail-panel").style.display = "none";
 }
 
@@ -969,9 +1084,15 @@ function renderActivityGradingSummary(summary) {
            </button>`
         : `<span style="font-size:12px;color:var(--muted)">Sin intentos</span>`;
 
+      const notesSnippet = m.review_notes
+        ? `<div style="font-size:11px;color:var(--blue);margin-top:3px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(m.review_notes)}">
+             💬 ${escapeHtml(m.review_notes)}
+           </div>`
+        : "";
+
       return `
         <tr style="border-bottom:1px solid #f1f5f9">
-          <td style="padding:10px 12px;font-weight:600">${escapeHtml(m.user_name)}</td>
+          <td style="padding:10px 12px;font-weight:600">${escapeHtml(m.user_name)}${notesSnippet}</td>
           <td style="padding:10px 12px;color:var(--muted)">${escapeHtml(m.user_email)}</td>
           <td style="padding:10px 12px;text-align:center">${m.total_attempts}</td>
           <td style="padding:10px 12px;text-align:center">${scoreDisplay}</td>
@@ -993,12 +1114,16 @@ function renderActivityGradingSummary(summary) {
 }
 
 async function inspectStudentAttempts(topicId, userId, userName, userEmail) {
+  activeStudentId = userId;
   const panel = byId("student-attempt-detail-panel");
   panel.style.display = "block";
   panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
   byId("detail-student-name").textContent = `Intentos de: ${userName}`;
   byId("detail-student-email").textContent = userEmail;
+
+  // Cargar diálogo y retroalimentación para este alumno en la actividad
+  loadActivityComments(topicId, userId);
 
   const tabs = byId("student-attempts-tabs");
   const content = byId("attempt-questions-breakdown");
@@ -1061,12 +1186,12 @@ function selectStudentAttempt(att) {
   byId("grade-inline-attempt-id").value = att.id;
   byId("grade-inline-score").value = att.final_score ?? att.raw_score;
 
-  let reviewNotes = "";
+  let reviewNotes = att.review_notes || "";
   let answersData = null;
   try {
     if (att.answers_json) {
       answersData = typeof att.answers_json === "string" ? JSON.parse(att.answers_json) : att.answers_json;
-      if (answersData && typeof answersData === "object") {
+      if (answersData && typeof answersData === "object" && !reviewNotes) {
         reviewNotes = answersData.review_notes || "";
       }
     }
@@ -1080,24 +1205,38 @@ function selectStudentAttempt(att) {
 
   let questionsHtml = "";
   if (answersData) {
-    const mcAnswers = answersData.multiple_choice_answers || answersData.answers || [];
-    const openAnswers = answersData.open_answers || [];
+    const mcAnswers = answersData.multiple_choice || answersData.multiple_choice_answers || answersData.answers || [];
+    const openAnswers = answersData.open_questions || answersData.open_answers || [];
 
     if (mcAnswers.length > 0) {
       questionsHtml += `<h4 style="margin:12px 0 6px;font-size:13px;color:var(--ink)">Respuestas de opción múltiple entregadas:</h4>`;
-      questionsHtml += mcAnswers.map((ans, idx) => `
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin-bottom:6px">
-          <strong>Pregunta #${(ans.question_index ?? idx) + 1}:</strong> Opción seleccionada: <code>${ans.selected_option !== undefined ? `Opción ${ans.selected_option + 1}` : 'Sin responder'}</code>
-        </div>
-      `).join("");
+      questionsHtml += mcAnswers.map((ans, idx) => {
+        const optText = ans.selected_option !== undefined ? `Opción ${ans.selected_option + 1}` : 'Sin responder';
+        const isCorrectBadge = ans.is_correct !== undefined
+          ? (ans.is_correct ? '<span style="color:#16a34a;font-weight:700">✓ Correcta</span>' : '<span style="color:var(--red);font-weight:700">✗ Incorrecta</span>')
+          : '';
+        return `
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+              <strong>Pregunta #${(ans.question_index ?? idx) + 1}:</strong>
+              <div>Opción seleccionada: <code>${optText}</code> ${isCorrectBadge}</div>
+            </div>
+            ${ans.explanation ? `<p style="margin:4px 0 0;font-size:12px;color:var(--muted)"><em>${escapeHtml(ans.explanation)}</em></p>` : ''}
+          </div>
+        `;
+      }).join("");
     }
 
     if (openAnswers.length > 0) {
       questionsHtml += `<h4 style="margin:12px 0 6px;font-size:13px;color:var(--ink)">Respuestas a preguntas abiertas:</h4>`;
       questionsHtml += openAnswers.map((ans, idx) => `
         <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:8px 12px;margin-bottom:6px">
-          <strong>Pregunta #${(ans.question_index ?? idx) + 1}:</strong>
-          <p style="margin:4px 0 0;white-space:pre-wrap;background:#fff;padding:8px;border-radius:4px;border:1px solid #e2e8f0">${escapeHtml(ans.answer || ans.student_answer || '')}</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+            <strong>Pregunta #${(ans.question_index ?? idx) + 1}:</strong>
+            ${ans.score !== undefined ? `<span style="font-size:12px;font-weight:600;color:var(--blue)">Puntaje sugerido RAG: ${Math.round(ans.score * 100)}%</span>` : ''}
+          </div>
+          <p style="margin:4px 0 0;white-space:pre-wrap;background:#fff;padding:8px;border-radius:4px;border:1px solid #e2e8f0">${escapeHtml(ans.student_answer || ans.answer || '')}</p>
+          ${ans.feedback_text ? `<p style="margin:4px 0 0;font-size:12px;color:var(--muted)"><em>Retroalimentación RAG: ${escapeHtml(ans.feedback_text)}</em></p>` : ''}
         </div>
       `).join("");
     }
@@ -1127,17 +1266,91 @@ byId("activity-inline-grade-form")?.addEventListener("submit", async (e) => {
 
   await runWithButtonDisabled(byId("grade-inline-submit-btn"), async () => {
     try {
-      await apiUpdateAttemptGrade(groupId, currentGradingTopicId, attemptId, finalScore, reviewNotes);
+      const updated = await apiUpdateAttemptGrade(groupId, currentGradingTopicId, attemptId, finalScore, reviewNotes);
       showToast("Calificación actualizada exitosamente.", "success");
       const currentAttempt = activeStudentAttempts.find((a) => a.id === attemptId);
       if (currentAttempt) {
         currentAttempt.final_score = finalScore;
+        currentAttempt.review_notes = reviewNotes;
+        if (updated && updated.answers_json) {
+          currentAttempt.answers_json = updated.answers_json;
+        } else {
+          try {
+            const data = currentAttempt.answers_json ? JSON.parse(currentAttempt.answers_json) : {};
+            data.review_notes = reviewNotes;
+            currentAttempt.answers_json = JSON.stringify(data);
+          } catch {
+            currentAttempt.answers_json = JSON.stringify({ review_notes: reviewNotes });
+          }
+        }
       }
       if (currentGradingTopicId) {
         await loadActivityGrading(currentGradingTopicId);
         renderStudentAttemptTabs(activeStudentAttempts);
         if (currentAttempt) selectStudentAttempt(currentAttempt);
+        if (activeStudentId) {
+          await loadActivityComments(currentGradingTopicId, activeStudentId);
+        }
       }
+    } catch (err) {
+      noticeVisible(err.message, "error");
+    }
+  });
+});
+
+// ==========================================
+// --- Diálogo y Retroalimentación (Comentarios) ---
+// ==========================================
+function renderActivityComments(comments, container) {
+  if (!container) return;
+  if (!comments || !comments.length) {
+    container.innerHTML = `<p style="font-size:12px;color:var(--muted);text-align:center;padding:12px 0">No hay comentarios ni mensajes en este diálogo todavía.</p>`;
+    return;
+  }
+  container.innerHTML = comments
+    .map((c) => {
+      const isTeacher = Boolean(c.author_is_teacher);
+      const bubbleClass = isTeacher ? "comment-bubble--teacher" : "comment-bubble--student";
+      const roleLabel = isTeacher ? "Docente" : "Estudiante";
+      const dateStr = c.created_at ? new Date(c.created_at).toLocaleString("es") : "";
+      return `
+        <div class="comment-bubble ${bubbleClass}">
+          <div class="comment-bubble-meta">
+            <span>${escapeHtml(c.author_name || (isTeacher ? "Profesor" : "Alumno"))} (${roleLabel})</span>
+            <span style="font-size:10px;font-weight:normal;opacity:0.8">${escapeHtml(dateStr)}</span>
+          </div>
+          <div class="comment-bubble-body">${escapeHtml(c.content)}</div>
+        </div>
+      `;
+    })
+    .join("");
+  container.scrollTop = container.scrollHeight;
+}
+
+async function loadActivityComments(topicId, studentId) {
+  const container = byId("activity-comments-list");
+  if (!container) return;
+  container.innerHTML = `<p style="font-size:12px;color:var(--muted)">Cargando diálogo…</p>`;
+  try {
+    const comments = await apiListTopicComments(groupId, topicId, studentId);
+    renderActivityComments(comments, container);
+  } catch (err) {
+    container.innerHTML = `<p style="font-size:12px;color:var(--red)">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+byId("activity-comment-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const textarea = byId("activity-comment-input");
+  const content = textarea?.value.trim();
+  if (!content || !currentGradingTopicId || !activeStudentId) return;
+
+  await runWithButtonDisabled(byId("activity-comment-send-btn"), async () => {
+    try {
+      await apiCreateTopicComment(groupId, currentGradingTopicId, content, activeStudentId, activeAttemptId);
+      textarea.value = "";
+      showToast("Comentario enviado al estudiante exitosamente.", "success");
+      await loadActivityComments(currentGradingTopicId, activeStudentId);
     } catch (err) {
       noticeVisible(err.message, "error");
     }

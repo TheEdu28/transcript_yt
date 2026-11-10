@@ -89,6 +89,13 @@ def test_compute_member_topic_summary():
     # Promedio raw = (70 + 100 + 80) / 3 = 83.33
     assert res["average_raw_score"] == 83.33
 
+    # Caso 3: Miembro con notas de revisión
+    att_rev = SimpleNamespace(id=4, attempt_number=4, raw_score=90.0, final_score=95.0, review_notes="Excelente")
+    res_rev = compute_member_topic_summary(
+        user_id=3, user_name="Lucia", user_email="lucia@test.com", attempts=[att_rev]
+    )
+    assert res_rev["review_notes"] == "Excelente"
+
 
 def test_compute_quiz_raw_score():
     """Valida el cálculo del raw_score normalizado en cuestionarios mixtos o puros."""

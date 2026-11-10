@@ -58,8 +58,8 @@ class VideoRepository:
         if search and search.strip():
             where.append(Video.title.ilike(f"%{search.strip()}%"))
 
-        order_col = Video.created_at.asc() if str(order).lower() == "asc" else Video.created_at.desc()
-        base_q = select(Video).where(*where).order_by(order_col)
+        order_cols = (Video.created_at.asc(), Video.id.asc()) if str(order).lower() == "asc" else (Video.created_at.desc(), Video.id.desc())
+        base_q = select(Video).where(*where).order_by(*order_cols)
         total = session.scalar(select(func.count()).select_from(Video).where(*where)) or 0
 
         videos = session.scalars(

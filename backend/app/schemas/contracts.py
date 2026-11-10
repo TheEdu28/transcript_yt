@@ -480,6 +480,7 @@ class AttemptResponse(BaseModel):
     raw_score: float
     final_score: float
     submitted_at: datetime
+    review_notes: str | None = None
 
 
 class AdminAttemptResponse(AttemptResponse):
@@ -501,6 +502,7 @@ class MemberTopicSummary(BaseModel):
     average_raw_score: float | None
     status: Literal["evaluated", "pending", "not_submitted"] = "pending"
     final_score: float | None = None
+    review_notes: str | None = None
 
 
 class TopicSummaryResponse(BaseModel):
@@ -552,6 +554,52 @@ class GroupGradesResponse(BaseModel):
     total_topics: int
     topics: list[TopicResponse] = Field(default_factory=list)
     members: list[MemberGradeSummary]
+
+
+class TopicCommentCreate(BaseModel):
+    """Payload para publicar un comentario o respuesta."""
+
+    content: str = Field(min_length=1, max_length=2000)
+    student_id: int | None = None
+    attempt_id: int | None = None
+
+
+class TopicCommentResponse(BaseModel):
+    """Comentario individual del hilo de retroalimentación."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    topic_id: int
+    student_id: int
+    author_id: int
+    attempt_id: int | None = None
+    author_name: str
+    author_role: str  # "teacher" | "student"
+    content: str
+    created_at: datetime
+
+
+class NotificationResponse(BaseModel):
+    """Notificación dirigida a un usuario."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    title: str
+    message: str
+    type: str
+    link: str | None = None
+    is_read: bool
+    created_at: datetime
+
+
+class NotificationListResponse(BaseModel):
+    """Lista de notificaciones de un usuario."""
+
+    items: list[NotificationResponse]
+    unread_count: int
 
 
 

@@ -113,6 +113,7 @@ def compute_member_topic_summary(
             "average_raw_score": None,
             "status": "not_submitted",
             "final_score": None,
+            "review_notes": None,
         }
 
     total = len(attempts)
@@ -121,6 +122,21 @@ def compute_member_topic_summary(
 
     avg_final = round(sum(a.final_score for a in attempts) / total, 2)
     avg_raw = round(sum(a.raw_score for a in attempts) / total, 2)
+
+    latest_review_notes = getattr(latest_attempt, "review_notes", None)
+    if not latest_review_notes:
+        for a in reversed(attempts):
+            notes = getattr(a, "review_notes", None)
+            if not notes and hasattr(a, "answers_json") and a.answers_json:
+                try:
+                    ans_data = json.loads(a.answers_json)
+                    if isinstance(ans_data, dict):
+                        notes = ans_data.get("review_notes")
+                except Exception:
+                    pass
+            if notes:
+                latest_review_notes = notes
+                break
 
     return {
         "user_id": user_id,
@@ -133,6 +149,7 @@ def compute_member_topic_summary(
         "average_raw_score": avg_raw,
         "status": "evaluated",
         "final_score": latest_attempt.final_score if latest_attempt else None,
+        "review_notes": latest_review_notes,
     }
 
 
